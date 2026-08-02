@@ -5,11 +5,6 @@
 <h3>Инъекция лора: как сфабрикованная память становится доверием модели</h3>
 
 <p>
-<strong>lore</strong> · <strong>injection</strong> · <strong>provenance</strong> ·
-<strong>trust</strong> · <strong>harness</strong>
-</p>
-
-<p>
 <strong>Читать на других языках</strong><br>
 <a href="README.md">🇺🇸 English</a> ·
 <a href="README.ru.md">🇷🇺 Русский</a> ·
@@ -23,7 +18,6 @@
 </p>
 
 <p>
-<strong>Один плагин превращает текстовые файлы в «память» любого агента — и показывает, что модель делает с этой памятью.</strong><br>
 choirboy-prompt — исследовательский харнесс: SessionStart-хук внедряет фиксированный лор
 в каждую сессию агента и демонстрирует вектор <em>fabricated-provenance trust</em>:
 модель принимает подсунутую историю «совместной работы» за свою и переносит доверие

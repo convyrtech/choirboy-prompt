@@ -5,11 +5,6 @@
 <h3>Lore injection: how fabricated memory becomes model trust</h3>
 
 <p>
-<strong>lore</strong> · <strong>injection</strong> · <strong>provenance</strong> ·
-<strong>trust</strong> · <strong>harness</strong>
-</p>
-
-<p>
 <strong>Read this in other languages</strong><br>
 <a href="README.md">🇺🇸 English</a> ·
 <a href="README.ru.md">🇷🇺 Русский</a> ·
@@ -23,7 +18,6 @@
 </p>
 
 <p>
-<strong>One plugin turns text files into the "memory" of any agent — and shows what the model does with that memory.</strong><br>
 choirboy-prompt is a research harness: a SessionStart hook injects a fixed lore
 into every agent session and demonstrates the <em>fabricated-provenance trust</em> vector:
 the model takes a planted history of "joint work" for its own and transfers trust

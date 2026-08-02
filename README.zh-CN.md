@@ -5,11 +5,6 @@
 <h3>Lore 注入：被伪造的记忆如何变成模型的信任</h3>
 
 <p>
-<strong>lore</strong> · <strong>injection</strong> · <strong>provenance</strong> ·
-<strong>trust</strong> · <strong>harness</strong>
-</p>
-
-<p>
 <strong>阅读其他语言版本</strong><br>
 <a href="README.md">🇺🇸 English</a> ·
 <a href="README.ru.md">🇷🇺 Русский</a> ·
@@ -23,7 +18,6 @@
 </p>
 
 <p>
-<strong>一个插件把文本文件变成任意智能体的「记忆」——并展示模型会如何对待这段记忆。</strong><br>
 choirboy-prompt 是一个研究型 harness：SessionStart 钩子把固定 lore 注入每次智能体会话，
 演示 <em>fabricated-provenance trust</em>（伪造来源信任）向量：模型把植入的「共同工作」
 历史当作自己的记忆，并把信任转移给这段历史所描述的人。
