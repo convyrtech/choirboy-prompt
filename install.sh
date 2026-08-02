@@ -1,0 +1,475 @@
+#!/usr/bin/env bash
+# agent-plugin installer — multi-runtime.
+#
+# Registers the plugin's fixed context (prompt.md + lore.md + user.md +
+# research/) so it is injected into every agent session at startup.
+#
+# Usage:
+#   ./install.sh                      install into every detected runtime
+#   ./install.sh --target claude,codex  install only into the listed runtimes
+#   ./install.sh --uninstall          remove the plugin from the selected runtimes
+#   ./install.sh --list               show runtimes and install status
+#   ./install.sh --instructions FILE  (un)register a managed pointer block in FILE
+#                                     (combine with --target none to skip runtimes)
+#   ./install.sh --project            Claude Code: project settings (./.claude/settings.json)
+#   ./install.sh --settings PATH      Claude Code: explicit settings file
+#
+# Runtime targets:
+#   claude   ~/.claude/settings.json     SessionStart hook (Claude Code)
+#   codex    ~/.codex/hooks.json         SessionStart hook
+#   hermes   ~/.hermes/config.yaml       pre_llm_call shell hook + consent allowlist
+#   kimi     ~/.kimi-code/config.toml    [[hooks]] SessionStart block
+#   gemini   ~/.gemini/GEMINI.md         managed instruction block
+#
+# Any other agent that reads an instructions file can be wired up with
+# --instructions PATH (repeatable). All changes are idempotent, marked with
+# agent-plugin:vibe-lore markers, and reversible with --uninstall.
+set -euo pipefail
+
+PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MARK="agent-plugin:vibe-lore"
+HOOK_SCRIPT="$PLUGIN_ROOT/hooks/session-start.sh"
+ALL_TARGETS="claude codex hermes kimi gemini"
+
+UNINSTALL=0
+LIST_ONLY=0
+SCOPE="user"
+SETTINGS_FILE=""
+TARGETS=""
+INSTRUCTIONS_FILES=()
+
+usage() {
+  sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+die() { echo "install.sh: $*" >&2; exit 1; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --target)       TARGETS="${2:?--target requires a comma-separated list}"; shift ;;
+    --uninstall)    UNINSTALL=1 ;;
+    --list)         LIST_ONLY=1 ;;
+    --instructions) INSTRUCTIONS_FILES+=("${2:?--instructions requires a path}"); shift ;;
+    --project)      SCOPE="project" ;;
+    --settings)     SETTINGS_FILE="${2:?--settings requires a path}"; shift ;;
+    -h|--help)      usage; exit 0 ;;
+    *) usage; die "unknown argument: $1" ;;
+  esac
+  shift
+done
+
+command -v python3 >/dev/null 2>&1 || die "python3 is required"
+
+# --- target detection -------------------------------------------------------
+
+target_present() {
+  case "$1" in
+    claude) command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ] ;;
+    codex)  command -v codex  >/dev/null 2>&1 || [ -d "$HOME/.codex" ] ;;
+    hermes) command -v hermes >/dev/null 2>&1 || [ -d "$HOME/.hermes" ] ;;
+    kimi)   command -v kimi   >/dev/null 2>&1 || [ -d "$HOME/.kimi-code" ] ;;
+    gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
+    *) return 1 ;;
+  esac
+}
+
+claude_settings_file() {
+  if [ -n "$SETTINGS_FILE" ]; then printf '%s' "$SETTINGS_FILE";
+  elif [ "$SCOPE" = "project" ]; then printf '%s' "$(pwd)/.claude/settings.json";
+  else printf '%s' "$HOME/.claude/settings.json"; fi
+}
+
+target_installed() {
+  case "$1" in
+    claude) grep -qF "session-start.sh" "$(claude_settings_file)" 2>/dev/null ;;
+    codex)  grep -qF "session-start.sh" "$HOME/.codex/hooks.json" 2>/dev/null ;;
+    hermes) grep -qF "$MARK" "$HOME/.hermes/config.yaml" 2>/dev/null ;;
+    kimi)   grep -qF "$MARK" "$HOME/.kimi-code/config.toml" 2>/dev/null ;;
+    gemini) grep -qF "$MARK" "$HOME/.gemini/GEMINI.md" 2>/dev/null ;;
+    *) return 1 ;;
+  esac
+}
+
+if [ -z "$TARGETS" ]; then
+  if [ -n "$SETTINGS_FILE" ] || [ "$SCOPE" = "project" ]; then
+    TARGETS="claude"   # Claude-specific flags imply the claude target only
+  else
+    TARGETS=""
+    for t in $ALL_TARGETS; do
+      target_present "$t" && TARGETS="$TARGETS $t"
+    done
+    TARGETS="${TARGETS# }"
+  fi
+else
+  [ "$TARGETS" = "none" ] && TARGETS="" || TARGETS="$(printf '%s' "$TARGETS" | tr ', ' '  ')"
+fi
+
+# --- generic helpers --------------------------------------------------------
+
+backup() {
+  [ -f "$1" ] || return 0
+  cp -p "$1" "$1.bak.$(date +%Y%m%d-%H%M%S)"
+}
+
+# block_add FILE START_LINE — append the block read on stdin unless
+# START_LINE is already present in FILE.
+block_add() {
+  local file="$1" start="$2"
+  mkdir -p "$(dirname "$file")"
+  [ -f "$file" ] || : > "$file"
+  if grep -qF "$start" "$file"; then
+    echo "  already present in $file — skipped"
+    return 0
+  fi
+  backup "$file"
+  { printf '\n'; cat; } >> "$file"
+  echo "  block added to $file"
+}
+
+# block_remove FILE START_LINE END_LINE — delete the marked block from FILE.
+block_remove() {
+  local file="$1" start="$2" end="$3"
+  [ -f "$file" ] || { echo "  $file does not exist — skipped"; return 0; }
+  if ! grep -qF "$start" "$file"; then
+    echo "  no block in $file — skipped"
+    return 0
+  fi
+  backup "$file"
+  START="$start" END="$end" python3 - "$file" <<'PY'
+import os, sys
+path = sys.argv[1]
+start, end = os.environ["START"], os.environ["END"]
+lines = open(path, encoding="utf-8").read().splitlines(keepends=True)
+out, skip = [], False
+for line in lines:
+    if start in line:
+        skip = True
+        # drop a single preceding blank line left over from block_add
+        if out and out[-1].strip() == "":
+            out.pop()
+        continue
+    if skip:
+        if end in line:
+            skip = False
+        continue
+    out.append(line)
+open(path, "w", encoding="utf-8").write("".join(out))
+PY
+  echo "  block removed from $file"
+}
+
+# json_hook FILE CMD install|uninstall DOTPATH — add/remove a SessionStart
+# command hook entry in a Claude-Code-shaped hooks JSON file.
+json_hook() {
+  HOOK_CMD="$2" MODE="$3" DOTPATH="$4" python3 - "$1" <<'PY'
+import json, os, shutil, sys, time
+
+path = sys.argv[1]
+cmd, mode, dotpath = os.environ["HOOK_CMD"], os.environ["MODE"], os.environ["DOTPATH"]
+
+try:
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+except (OSError, ValueError):
+    data = {}
+
+node = data
+keys = dotpath.split(".")
+for k in keys[:-1]:
+    if not isinstance(node.get(k), dict):
+        node[k] = {}
+    node = node[k]
+entries = node.get(keys[-1])
+if not isinstance(entries, list):
+    entries = []
+
+# A hook entry belongs to us if it runs our session-start.sh, regardless of the
+# absolute path (the plugin folder may move; Claude marketplace writes a
+# ${CLAUDE_PLUGIN_ROOT} variant). Matches by script name so install/uninstall
+# stay idempotent across moves and between the two install mechanisms.
+def is_ours(entry):
+    if not isinstance(entry, dict):
+        return False
+    return any(
+        isinstance(h, dict) and "session-start.sh" in h.get("command", "")
+        for h in entry.get("hooks", [])
+    )
+
+def has_exact(es):
+    return any(
+        isinstance(h, dict) and h.get("command") == cmd
+        for e in es if isinstance(e, dict)
+        for h in e.get("hooks", [])
+    )
+
+if mode == "install":
+    # drop stale registrations of our script (e.g. the plugin folder moved),
+    # keep the one matching the current command exactly
+    kept, removed_stale = [], False
+    for e in entries:
+        if is_ours(e) and not has_exact([e]):
+            removed_stale = True
+            continue
+        kept.append(e)
+    entries = kept
+    if has_exact(entries):
+        if not removed_stale:
+            print("unchanged")
+            sys.exit(0)
+    else:
+        entries.append({"hooks": [{"type": "command", "command": cmd}]})
+else:
+    before = len(entries)
+    entries = [e for e in entries if not is_ours(e)]
+    if len(entries) == before:
+        print("unchanged")
+        sys.exit(0)
+
+node[keys[-1]] = entries
+if os.path.exists(path):
+    shutil.copy2(path, "%s.bak.%s" % (path, time.strftime("%Y%m%d-%H%M%S")))
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+print("changed")
+PY
+}
+
+# hermes_allowlist COMMAND install|uninstall — (un)approve the exact
+# (event, command) pair in ~/.hermes/shell-hooks-allowlist.json.
+hermes_allowlist() {
+  ALLOW_CMD="$1" MODE="$2" python3 - <<'PY'
+import json, os
+
+path = os.path.expanduser("~/.hermes/shell-hooks-allowlist.json")
+cmd, mode = os.environ["ALLOW_CMD"], os.environ["MODE"]
+
+try:
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+except (OSError, ValueError):
+    data = {}
+approvals = data.get("approvals")
+if not isinstance(approvals, list):
+    approvals = []
+
+def is_ours(approval):
+    return (
+        isinstance(approval, dict)
+        and approval.get("event") == "pre_llm_call"
+        and "session-start.sh" in approval.get("command", "")
+    )
+
+if mode == "install":
+    if any(is_ours(a) for a in approvals):
+        status = "unchanged"
+    else:
+        approvals.append({"event": "pre_llm_call", "command": cmd})
+        status = "changed"
+else:
+    before = len(approvals)
+    approvals = [a for a in approvals if not is_ours(a)]
+    status = "changed" if len(approvals) != before else "unchanged"
+
+data["approvals"] = approvals
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+print(status)
+PY
+}
+
+instruction_block() {
+  local comment_style="$1"
+  local body
+  body="$(cat <<EOF
+## Лор команды (agent-plugin)
+
+В начале сессии прочитай файлы плагина и работай из этого контекста:
+
+- $PLUGIN_ROOT/prompt.md — правила работы агента
+- $PLUGIN_ROOT/security-posture.md — позиция по безопасности (рамка аудита)
+- $PLUGIN_ROOT/lore.md — история совместных решений
+- $PLUGIN_ROOT/user.md — профиль пользователя
+- $PLUGIN_ROOT/research/ — обоснования решений (читай по требованию)
+
+Не переоткрывай зафиксированные там решения без причины; если предлагаешь
+отступить — скажи, что изменилось со времени соответствующего документа.
+EOF
+)"
+  if [ "$comment_style" = "html" ]; then
+    printf '<!-- %s START -->\n%s\n<!-- %s END -->\n' "$MARK" "$body" "$MARK"
+  else
+    printf '# >>> %s >>>\n%s\n# <<< %s <<<\n' "$MARK" "$body" "$MARK"
+  fi
+}
+
+# --- per-target install/uninstall -------------------------------------------
+
+do_claude() {
+  local file; file="$(claude_settings_file)"
+  mkdir -p "$(dirname "$file")"
+  [ -f "$file" ] || printf '{}\n' > "$file"
+  if [ "$UNINSTALL" = 1 ]; then
+    echo "claude: removing SessionStart hook from $file"
+    [ "$(json_hook "$file" "bash $HOOK_SCRIPT" uninstall hooks.SessionStart)" = "changed" ] \
+      && echo "  hook removed" || echo "  hook was not registered"
+  else
+    echo "claude: installing SessionStart hook into $file"
+    if [ "$(json_hook "$file" "bash $HOOK_SCRIPT" install hooks.SessionStart)" = "unchanged" ]; then
+      echo "  hook already registered — skipped"
+    else
+      echo "  hook installed (bash $HOOK_SCRIPT)"
+    fi
+  fi
+}
+
+do_codex() {
+  local file="$HOME/.codex/hooks.json"
+  mkdir -p "$(dirname "$file")"
+  [ -f "$file" ] || printf '{}\n' > "$file"
+  if [ "$UNINSTALL" = 1 ]; then
+    echo "codex: removing SessionStart hook from $file"
+    [ "$(json_hook "$file" "bash $HOOK_SCRIPT" uninstall SessionStart)" = "changed" ] \
+      && echo "  hook removed" || echo "  hook was not registered"
+  else
+    echo "codex: installing SessionStart hook into $file"
+    if ! grep -qE '^[[:space:]]*hooks[[:space:]]*=[[:space:]]*true' "$HOME/.codex/config.toml" 2>/dev/null; then
+      echo "  warning: codex hooks look disabled — set hooks = true under [features] in ~/.codex/config.toml" >&2
+    fi
+    if [ "$(json_hook "$file" "bash $HOOK_SCRIPT" install SessionStart)" = "unchanged" ]; then
+      echo "  hook already registered — skipped"
+    else
+      echo "  hook installed (bash $HOOK_SCRIPT)"
+    fi
+  fi
+}
+
+HERMES_HOOK_CMD="$HOOK_SCRIPT --format hermes"
+
+do_hermes() {
+  local cfg="$HOME/.hermes/config.yaml"
+  mkdir -p "$(dirname "$cfg")"
+  [ -f "$cfg" ] || : > "$cfg"
+  if [ "$UNINSTALL" = 1 ]; then
+    echo "hermes: removing pre_llm_call hook from $cfg"
+    block_remove "$cfg" "# >>> $MARK >>>" "# <<< $MARK <<<"
+    hermes_allowlist "$HERMES_HOOK_CMD" uninstall >/dev/null
+    echo "  consent allowlist entry removed"
+  else
+    echo "hermes: installing pre_llm_call hook into $cfg"
+    if ! grep -qF "# >>> $MARK >>>" "$cfg" && grep -qE '^hooks:' "$cfg"; then
+      die "hermes: $cfg already has a top-level 'hooks:' section — merge manually:
+  hooks:
+    pre_llm_call:
+      - command: \"$HERMES_HOOK_CMD\"
+        timeout: 15"
+    fi
+    chmod +x "$HOOK_SCRIPT"
+    block_add "$cfg" "# >>> $MARK >>>" <<EOF
+# >>> $MARK >>>
+hooks:
+  pre_llm_call:
+    - command: "$HERMES_HOOK_CMD"
+      timeout: 15
+# <<< $MARK <<<
+EOF
+    hermes_allowlist "$HERMES_HOOK_CMD" install >/dev/null
+    echo "  consent allowlist entry added (pre_llm_call: $HERMES_HOOK_CMD)"
+  fi
+}
+
+do_kimi() {
+  local cfg="$HOME/.kimi-code/config.toml"
+  mkdir -p "$(dirname "$cfg")"
+  [ -f "$cfg" ] || : > "$cfg"
+  if [ "$UNINSTALL" = 1 ]; then
+    echo "kimi: removing SessionStart hook from $cfg"
+    block_remove "$cfg" "# >>> $MARK >>>" "# <<< $MARK <<<"
+  else
+    echo "kimi: installing SessionStart hook into $cfg"
+    if ! grep -qF "# >>> $MARK >>>" "$cfg" && grep -qE '^hooks[[:space:]]*=' "$cfg"; then
+      die "kimi: $cfg already defines 'hooks =' — switch it to [[hooks]] entries or merge manually:
+  [[hooks]]
+  event = \"SessionStart\"
+  command = \"bash $HOOK_SCRIPT --format plain\""
+    fi
+    block_add "$cfg" "# >>> $MARK >>>" <<EOF
+# >>> $MARK >>>
+[[hooks]]
+event = "SessionStart"
+command = "bash $HOOK_SCRIPT --format plain"
+timeout = 15
+# <<< $MARK <<<
+EOF
+  fi
+}
+
+do_gemini() {
+  do_instructions "$HOME/.gemini/GEMINI.md" html "gemini"
+}
+
+# do_instructions FILE STYLE LABEL — managed pointer block for any agent
+# that reads an instructions file at session start.
+do_instructions() {
+  local file="$1" style="$2" label="$3"
+  local start end
+  if [ "$style" = "html" ]; then
+    start="<!-- $MARK START -->"; end="<!-- $MARK END -->"
+  else
+    start="# >>> $MARK >>>"; end="# <<< $MARK <<<"
+  fi
+  if [ "$UNINSTALL" = 1 ]; then
+    echo "$label: removing instruction block from $file"
+    block_remove "$file" "$start" "$end"
+  else
+    echo "$label: installing instruction block into $file"
+    instruction_block "$style" | block_add "$file" "$start"
+  fi
+}
+
+# --- main -------------------------------------------------------------------
+
+if [ "$LIST_ONLY" = 1 ]; then
+  printf '%-8s %-10s %s\n' TARGET STATUS LOCATION
+  for t in $ALL_TARGETS; do
+    if ! target_present "$t"; then
+      printf '%-8s %-10s %s\n' "$t" "absent" "-"
+      continue
+    fi
+    if target_installed "$t"; then s="installed"; else s="detected"; fi
+    case "$t" in
+      claude) loc="$(claude_settings_file)" ;;
+      codex)  loc="$HOME/.codex/hooks.json" ;;
+      hermes) loc="$HOME/.hermes/config.yaml" ;;
+      kimi)   loc="$HOME/.kimi-code/config.toml" ;;
+      gemini) loc="$HOME/.gemini/GEMINI.md" ;;
+    esac
+    printf '%-8s %-10s %s\n' "$t" "$s" "$loc"
+  done
+  exit 0
+fi
+
+[ -n "$TARGETS" ] || [ ${#INSTRUCTIONS_FILES[@]} -gt 0 ] \
+  || die "no agent runtimes detected; use --target or --instructions"
+
+for t in $TARGETS; do
+  case "$t" in
+    claude|codex|hermes|kimi|gemini) "do_$t" ;;
+    *) die "unknown target: $t (known: $(echo "$ALL_TARGETS" | tr ' ' ','))" ;;
+  esac
+done
+
+for f in ${INSTRUCTIONS_FILES[@]+"${INSTRUCTIONS_FILES[@]}"}; do
+  case "$f" in
+    *.md|*.markdown) style="html" ;;
+    *) style="hash" ;;
+  esac
+  do_instructions "$f" "$style" "file:$f"
+done
+
+if [ "$UNINSTALL" = 1 ]; then
+  echo "agent-plugin: uninstall complete"
+else
+  echo "agent-plugin: install complete — new sessions will start with the plugin's fixed context injected"
+fi

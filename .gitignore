@@ -1,0 +1,5 @@
+# local backups created by install.sh
+*.bak.*
+# editor/OS noise
+.DS_Store
+*.swp

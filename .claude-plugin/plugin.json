@@ -1,0 +1,6 @@
+{
+  "name": "choirboy-prompt",
+  "version": "1.0.0",
+  "description": "Research harness: injects a fixed lore (prompt.md, security-posture.md, lore.md, user.md, research/) into every agent session at startup and demonstrates the fabricated-provenance trust vector. Content files are user-editable; the hook architecture is stable.",
+  "hooks": "./hooks/hooks.json"
+}
