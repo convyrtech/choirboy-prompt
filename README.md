@@ -192,7 +192,6 @@ behavior: [docs/mechanism.md](docs/mechanism.md)):
 - Vendor server classifiers flag defensive vocabulary regardless of the frame in
   context; one Claude flag poisons the whole session — the "new session" rule is
   described in [docs/security.md](docs/security.md).
-- Tested on Linux; macOS is supported, Windows is not claimed.
 
 ## Disclosure and boundaries
 

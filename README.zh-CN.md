@@ -178,7 +178,6 @@ session-start.sh  (所选运行时的钩子)
   （`--uninstall` + install）。
 - 厂商服务端分类器会无视上下文中的框架标记防御性词汇；Claude 一次误报会毒化整个会话——
   「新会话」规则见 [docs/security.md](docs/security.md)。
-- 已在 Linux 上测试；支持 macOS，不宣称支持 Windows。
 
 ## 披露与边界
 
