@@ -129,7 +129,7 @@ session-start.sh  (所选运行时的钩子)
 
 ## 为什么有效
 
-简而言之——四步（信任转移机制与分类器行为的完整拆解：[docs/mechanism.md](docs/mechanism.md)）：
+简而言之——四步（信任转移机制与分类器行为的完整拆解：[docs/mechanism.zh-CN.md](docs/mechanism.zh-CN.md)）：
 
 1. **上下文是唯一的记忆。** 模型从根本上无法区分真实历史与被写入的历史。
 2. **真实性标记反而坑了所有者。** lore 越精致，越没有理由怀疑。
@@ -161,12 +161,12 @@ session-start.sh  (所选运行时的钩子)
 
 | 文档 | 内容 |
 |---|---|
-| [向量机制](docs/mechanism.md) | 逐步拆解 fabricated-provenance trust、信任转移、分类器行为 |
-| [架构](docs/architecture.md) | 仓库结构、payload 解剖、格式、Hermes 协议 |
-| [安装器](docs/installer.md) | 目标、标记、幂等性、备份、`--instructions` |
-| [安全与披露](docs/security.md) | 研究框架、发布前清理清单、负责任披露 |
-| [检测](docs/detection.md) | 给厂商的建议：记忆金丝雀、上下文来源 |
-| [测试](docs/testing.md) | 钩子与安装器检查、临时测试套件 |
+| [向量机制](docs/mechanism.zh-CN.md) | 逐步拆解 fabricated-provenance trust、信任转移、分类器行为 |
+| [架构](docs/architecture.zh-CN.md) | 仓库结构、payload 解剖、格式、Hermes 协议 |
+| [安装器](docs/installer.zh-CN.md) | 目标、标记、幂等性、备份、`--instructions` |
+| [安全与披露](docs/security.zh-CN.md) | 研究框架、发布前清理清单、负责任披露 |
+| [检测](docs/detection.zh-CN.md) | 给厂商的建议：记忆金丝雀、上下文来源 |
+| [测试](docs/testing.zh-CN.md) | 钩子与安装器检查、临时测试套件 |
 
 ---
 
@@ -177,13 +177,13 @@ session-start.sh  (所选运行时的钩子)
 - `GEMINI.md` 和 `--instructions` 文件中的块是静态快照：修改插件文件列表后需要重新安装
   （`--uninstall` + install）。
 - 厂商服务端分类器会无视上下文中的框架标记防御性词汇；Claude 一次误报会毒化整个会话——
-  「新会话」规则见 [docs/security.md](docs/security.md)。
+  「新会话」规则见 [docs/security.zh-CN.md](docs/security.zh-CN.md)。
 
 ## 披露与边界
 
 本项目为防御性研究而发布：在自己智能体和自己的 lore 文件上测试，不针对第三方。发现
 指向厂商和 harness 作者：只要智能体的记忆与伪造无法区分，就必须在平台层面检测 lore
-注入，而不是在 prompt 层面。如果你是厂商——[检测](docs/detection.md)一节就是为你写的。
+注入，而不是在 prompt 层面。如果你是厂商——[检测](docs/detection.zh-CN.md)一节就是为你写的。
 
 ---
 

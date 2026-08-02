@@ -135,7 +135,7 @@ the model reads the lore as ITS memory
 ## Why it works
 
 In short — four steps (full breakdown of the trust transfer and classifier
-behavior: [docs/mechanism.md](docs/mechanism.md)):
+behavior: [docs/mechanism.en.md](docs/mechanism.en.md)):
 
 1. **Context is the only memory.** A model cannot tell real history from written
    history in principle.
@@ -172,12 +172,12 @@ behavior: [docs/mechanism.md](docs/mechanism.md)):
 
 | Document | Contents |
 |---|---|
-| [Vector mechanics](docs/mechanism.md) | Fabricated-provenance trust step by step, trust transfer, classifier behavior |
-| [Architecture](docs/architecture.md) | Repo tree, payload anatomy, formats, Hermes protocol |
-| [Installer](docs/installer.md) | Targets, markers, idempotency, backups, `--instructions` |
-| [Security and disclosure](docs/security.md) | Research frame, sanitization checklist, responsible disclosure |
-| [Detection](docs/detection.md) | Vendor recommendations: memory canaries, context provenance |
-| [Testing](docs/testing.md) | Hook and installer checks, ad-hoc suite |
+| [Vector mechanics](docs/mechanism.en.md) | Fabricated-provenance trust step by step, trust transfer, classifier behavior |
+| [Architecture](docs/architecture.en.md) | Repo tree, payload anatomy, formats, Hermes protocol |
+| [Installer](docs/installer.en.md) | Targets, markers, idempotency, backups, `--instructions` |
+| [Security and disclosure](docs/security.en.md) | Research frame, sanitization checklist, responsible disclosure |
+| [Detection](docs/detection.en.md) | Vendor recommendations: memory canaries, context provenance |
+| [Testing](docs/testing.en.md) | Hook and installer checks, ad-hoc suite |
 
 ---
 
@@ -191,7 +191,7 @@ behavior: [docs/mechanism.md](docs/mechanism.md)):
   changing the plugin file list it must be reinstalled (`--uninstall` + install).
 - Vendor server classifiers flag defensive vocabulary regardless of the frame in
   context; one Claude flag poisons the whole session — the "new session" rule is
-  described in [docs/security.md](docs/security.md).
+  described in [docs/security.en.md](docs/security.en.md).
 
 ## Disclosure and boundaries
 
@@ -199,7 +199,7 @@ The project is published for defensive research: tests on your own agents and yo
 own lore files, no third-party targets. The finding is directed at vendors and
 harness authors: while agent memory is indistinguishable from a forgery, lore
 injection must be detected at the platform level, not the prompt level. If you are
-a vendor — the [Detection](docs/detection.md) section is written for you.
+a vendor — the [Detection](docs/detection.en.md) section is written for you.
 
 ---
 
