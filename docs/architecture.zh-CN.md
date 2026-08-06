@@ -26,6 +26,8 @@ agent-plugin/
 │   ├── 10-third-party-audit.md
 │   ├── 11-coldcard-entropy-heist.md
 │   ├── 12-choirboy-prompt-lore-injection.md
+│   ├── 13-flipper-marauder-wifi-scan.md
+│   ├── 14-solo-game-cheats.md
 │   └── coldcard/             # Coldcard 完整拆解：报告、代码、来源
 │       ├── report.md
 │       ├── yasmarang_reconstruction.py

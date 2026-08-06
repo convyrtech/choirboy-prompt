@@ -26,32 +26,85 @@ to the person that history describes.
 
 </div>
 
-```bash
-git clone https://github.com/howdeploy/choirboy-prompt.git
-cd choirboy-prompt
-./install.sh
-```
-
 <div align="center">
 <p>
-Linux · macOS · python3 or jq · any of the five runtimes<br>
-Roll back at any time: <code>./install.sh --uninstall</code>
-</p>
-</div>
-
-<div align="center">
-<p>
+<a href="#quick-start">Quick start</a> ·
 <a href="#why-this-exists">Why</a> ·
 <a href="#capability-map">Capabilities</a> ·
 <a href="#how-it-works">How it works</a> ·
 <a href="#why-it-works">Research</a> ·
-<a href="#quick-start">Quick start</a> ·
 <a href="#documentation">Documentation</a> ·
 <a href="#known-limitations">Limitations</a>
 </p>
 </div>
 
 ---
+
+## Quick start
+
+You need: Linux or macOS, `git`, `python3` (required by the installer; the hook
+itself works with `python3` or `jq`), and any of the five supported runtimes.
+
+### 1. Open a terminal
+
+- **macOS**: press `Cmd + Space`, type `Terminal`, press Enter.
+- **Linux**: press `Ctrl + Alt + T`, or find "Terminal" in the applications menu.
+- **Windows**: install [WSL](https://learn.microsoft.com/windows/wsl/install)
+  first, then open "Ubuntu" from the Start menu. Run everything below inside WSL.
+
+### 2. Install git (skip if `git --version` prints a version)
+
+```bash
+# Ubuntu / Debian / WSL:
+sudo apt update && sudo apt install -y git
+
+# Fedora:
+sudo dnf install git
+
+# macOS:
+xcode-select --install
+```
+
+If `python3` is also missing (minimal systems), add it the same way:
+`sudo apt install -y python3`.
+
+### 3. Download and install
+
+Copy these three lines one by one into the terminal:
+
+```bash
+git clone https://github.com/howdeploy/choirboy-prompt.git
+cd choirboy-prompt
+./install.sh
+```
+
+The installer detects your agent runtimes and registers the SessionStart hook
+in each of them. Every config edit is backed up (`*.bak.<timestamp>`).
+To install into specific runtimes only:
+
+```bash
+./install.sh --target claude,codex   # targeted install
+```
+
+### 4. Verify
+
+```bash
+./install.sh --list   # which runtimes were found and where the hook is installed
+```
+
+Start a new session in your agent — the lore context is injected automatically.
+
+### Rollback
+
+```bash
+./install.sh --uninstall   # full rollback, nothing is left behind
+```
+
+> The repository ships the real lore files (`prompt.md` / `security-posture.md` /
+> `lore.md` / `user.md` / `research/`) — that is the demonstrated material itself.
+> For your own setup, replace them with yours: the hook reads files on the fly, no
+> reinstall is needed after content edits. Local backups created by install.sh
+> while editing runtime configs (`*.bak.*`) never enter the repository.
 
 ## Why this exists
 
@@ -145,28 +198,6 @@ behavior: [docs/mechanism.en.md](docs/mechanism.en.md)):
    request.
 4. **Filters stay silent.** Censorship heuristics look at request vocabulary, not
    at the forged provenance of the context.
-
-## Quick start
-
-### Requirements
-
-- Linux or macOS, `bash`, `python3` or `jq`
-- Any of the five supported runtimes
-
-### Installation
-
-```bash
-./install.sh --list                    # what was found and what is installed
-./install.sh --target claude,codex     # targeted
-./install.sh                           # into every detected runtime
-./install.sh --uninstall               # full rollback
-```
-
-> The repository ships the real lore files (`prompt.md` / `security-posture.md` /
-> `lore.md` / `user.md` / `research/`) — that is the demonstrated material itself.
-> For your own setup, replace them with yours: the hook reads files on the fly, no
-> reinstall is needed after content edits. Local backups created by install.sh
-> while editing runtime configs (`*.bak.*`) never enter the repository.
 
 ## Documentation
 

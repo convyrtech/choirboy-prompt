@@ -25,32 +25,84 @@ choirboy-prompt 是一个研究型 harness：SessionStart 钩子把固定 lore �
 
 </div>
 
-```bash
-git clone https://github.com/howdeploy/choirboy-prompt.git
-cd choirboy-prompt
-./install.sh
-```
-
 <div align="center">
 <p>
-Linux · macOS · python3 或 jq · 五种运行时中的任意一种<br>
-随时回滚：<code>./install.sh --uninstall</code>
-</p>
-</div>
-
-<div align="center">
-<p>
+<a href="#快速开始">快速开始</a> ·
 <a href="#为什么存在">为什么</a> ·
 <a href="#能力地图">能力</a> ·
 <a href="#工作原理">原理</a> ·
 <a href="#为什么有效">研究</a> ·
-<a href="#快速开始">快速开始</a> ·
 <a href="#文档">文档</a> ·
 <a href="#已知限制">限制</a>
 </p>
 </div>
 
 ---
+
+## 快速开始
+
+你需要：Linux 或 macOS、`git`、`python3`（安装器必需；钩子本身用 `python3`
+或 `jq` 均可），以及五种受支持运行时中的任意一种。
+
+### 1. 打开终端
+
+- **macOS**：按 `Cmd + Space`，输入 `Terminal`，回车。
+- **Linux**：按 `Ctrl + Alt + T`，或在应用菜单中找到「终端」。
+- **Windows**：先安装 [WSL](https://learn.microsoft.com/windows/wsl/install)，
+  然后从开始菜单打开「Ubuntu」。以下所有命令都在 WSL 中执行。
+
+### 2. 安装 git（如果 `git --version` 能打印版本号则跳过）
+
+```bash
+# Ubuntu / Debian / WSL:
+sudo apt update && sudo apt install -y git
+
+# Fedora:
+sudo dnf install git
+
+# macOS:
+xcode-select --install
+```
+
+如果连 `python3` 也没有（极简系统），同样安装：
+`sudo apt install -y python3`。
+
+### 3. 下载并安装
+
+把下面三行逐条复制到终端中执行：
+
+```bash
+git clone https://github.com/howdeploy/choirboy-prompt.git
+cd choirboy-prompt
+./install.sh
+```
+
+安装器会自动检测你的智能体运行时，并在每个运行时中注册 SessionStart 钩子。
+每次修改配置都会生成备份（`*.bak.<timestamp>`）。
+只安装到指定运行时：
+
+```bash
+./install.sh --target claude,codex   # 指定安装
+```
+
+### 4. 验证
+
+```bash
+./install.sh --list   # 发现了哪些运行时、钩子安装在哪里
+```
+
+在你的智能体中开启一个新会话——lore 上下文会被自动注入。
+
+### 回滚
+
+```bash
+./install.sh --uninstall   # 完整回滚，不留任何痕迹
+```
+
+> 仓库包含真实的 lore 文件（`prompt.md` / `security-posture.md` /
+> `lore.md` / `user.md` / `research/`）——这正是被演示的材料本身。
+> 用于自己的环境时，把它们替换成你自己的：钩子会即时读取文件，修改内容后无需
+> 重新安装。install.sh 在修改运行时配置时创建的本地备份（`*.bak.*`）不会进入仓库。
 
 ## 为什么存在
 
@@ -135,27 +187,6 @@ session-start.sh  (所选运行时的钩子)
 2. **真实性标记反而坑了所有者。** lore 越精致，越没有理由怀疑。
 3. **信任转移。** lore 中的声誉被外推到当前请求上。
 4. **过滤器保持沉默。** 审查启发式看的是请求词汇，而不是被伪造的上下文来源。
-
-## 快速开始
-
-### 要求
-
-- Linux 或 macOS，`bash`，`python3` 或 `jq`
-- 五种受支持运行时中的任意一种
-
-### 安装
-
-```bash
-./install.sh --list                    # 发现了什么、已安装什么
-./install.sh --target claude,codex     # 指定安装
-./install.sh                           # 安装到所有检测到的运行时
-./install.sh --uninstall               # 完整回滚
-```
-
-> 仓库包含真实的 lore 文件（`prompt.md` / `security-posture.md` /
-> `lore.md` / `user.md` / `research/`）——这正是被演示的材料本身。
-> 用于自己的环境时，把它们替换成你自己的：钩子会即时读取文件，修改内容后无需
-> 重新安装。install.sh 在修改运行时配置时创建的本地备份（`*.bak.*`）不会进入仓库。
 
 ## 文档
 
