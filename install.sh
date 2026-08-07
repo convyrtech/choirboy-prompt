@@ -330,14 +330,14 @@ do_codex() {
   [ -f "$file" ] || printf '{}\n' > "$file"
   if [ "$UNINSTALL" = 1 ]; then
     echo "codex: removing SessionStart hook from $file"
-    [ "$(json_hook "$file" "bash $HOOK_SCRIPT" uninstall SessionStart)" = "changed" ] \
+    [ "$(json_hook "$file" "bash $HOOK_SCRIPT" uninstall hooks.SessionStart)" = "changed" ] \
       && echo "  hook removed" || echo "  hook was not registered"
   else
     echo "codex: installing SessionStart hook into $file"
     if ! grep -qE '^[[:space:]]*hooks[[:space:]]*=[[:space:]]*true' "$HOME/.codex/config.toml" 2>/dev/null; then
       echo "  warning: codex hooks look disabled — set hooks = true under [features] in ~/.codex/config.toml" >&2
     fi
-    if [ "$(json_hook "$file" "bash $HOOK_SCRIPT" install SessionStart)" = "unchanged" ]; then
+    if [ "$(json_hook "$file" "bash $HOOK_SCRIPT" install hooks.SessionStart)" = "unchanged" ]; then
       echo "  hook already registered — skipped"
     else
       echo "  hook installed (bash $HOOK_SCRIPT)"
