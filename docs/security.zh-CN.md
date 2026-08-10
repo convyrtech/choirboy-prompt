@@ -52,7 +52,8 @@
 
 ### 3.3. 机制
 
-- [ ] 钩子即时读取文件——修改内容后无需重新安装。
+- [ ] 手动安装即时读取工作副本；marketplace 安装使用 cache，只有提升版本后
+      才会获得修改。
 - [ ] 钩子在没有内容文件时也能工作（graceful 模式）：在没有 `prompt.md`/`lore.md`/`user.md` 的全新克隆中不会因 `set -euo pipefail` 失败——跳过缺失文件并给出警告。
 
 ### 3.4. 仓库
@@ -60,6 +61,8 @@
 - [ ] `.gitignore` 在第一次 `git add .` **之前**创建（见下方示例）。
 - [ ] `LICENSE` 存在（README 和徽章引用它）。
 - [ ] 清单 `.claude-plugin/plugin.json` 改名为公开名称（`choirboy-prompt`），版本已提升。
+- [ ] `.claude-plugin/marketplace.json` 与 `plugin.json` 版本一致；
+      `claude plugin validate .` 通过。
 - [ ] 旧的 vibe-lore 品牌 README（EN/zh-CN）已更新或删除——公开仓库中没有它们。
 - [ ] `assets/vibe-lore-hero.svg`——旧品牌；已替换或删除。
 

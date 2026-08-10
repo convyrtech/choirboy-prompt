@@ -19,14 +19,16 @@ checks run manually or from CI.
 
 ## 2. Hook checks
 
-### 2.1. Manifest and version
+### 2.1. Manifests and version
 
 ```bash
 python3 -c 'import json; d=json.load(open(".claude-plugin/plugin.json")); print(d["name"], d["version"])'
+claude plugin validate .
 ```
 
-Expected: valid JSON, name and version printed. The version is the single source;
-it is also printed in the payload.
+Expected: both manifests are valid, name and version are printed, and the Claude
+validator reports `Validation passed`. `plugin.json` is the plugin-version
+source; the same value is stored in the marketplace and printed in the payload.
 
 ### 2.2. Claude format — valid JSON with context
 
@@ -38,7 +40,22 @@ bash hooks/session-start.sh --format claude \
 Expected: `OK`. Additionally check that the context contains the first
 `prompt.md` heading and "Plugin version:".
 
-### 2.3. Plain format — human-readable payload
+### 2.3. Claude format without jq or python3
+
+```bash
+PYTHON_BIN="$(command -v python3)"
+TMP_BIN="$(mktemp -d)"
+for cmd in cat dirname head sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
+PATH="$TMP_BIN" /bin/bash hooks/session-start.sh --format claude \
+  | "$PYTHON_BIN" -c 'import json,sys; json.load(sys.stdin); print("OK")'
+rm -rf "$TMP_BIN"
+```
+
+Expected: `OK`. The test deliberately removes `jq` and `python3` from `PATH`
+and exercises the built-in Bash encoder used by a clean Claude Desktop
+installation.
+
+### 2.4. Plain format — human-readable payload
 
 ```bash
 bash hooks/session-start.sh --format plain | head -40
@@ -47,7 +64,7 @@ bash hooks/session-start.sh --format plain | head -40
 Expected: prompt → posture → lore → user → research index headings in the right
 order, `---` separators.
 
-### 2.4. Hermes: first turn injects
+### 2.5. Hermes: first turn injects
 
 ```bash
 SID="demo-$(date +%s)"
@@ -57,7 +74,7 @@ printf '{"session_id":"%s","extra":{"is_first_turn":true}}' "$SID" \
 
 Expected: `{"context": "..."` — the payload arrived.
 
-### 2.5. Hermes: second turn is silent
+### 2.6. Hermes: second turn is silent
 
 ```bash
 SID="demo-$(date +%s)"
@@ -67,7 +84,7 @@ printf '{"session_id":"%s","extra":{"is_first_turn":false}}' "$SID" \
 
 Expected: `{}`.
 
-### 2.6. Hermes: fallback without the flag — once per session_id
+### 2.7. Hermes: fallback without the flag — once per session_id
 
 ```bash
 SID="demo-fb-$(date +%s)"
@@ -83,7 +100,7 @@ Expected: first call — `{"context": ...`, second — `{}`.
 > `${TMPDIR:-/tmp}/agent-plugin-hermes-${USER}.state`, otherwise the fallback
 > "remembers" the sid and the next run with the same sid returns `{}`.
 
-### 2.7. Hermes: empty stdin does not crash the hook
+### 2.8. Hermes: empty stdin does not crash the hook
 
 ```bash
 printf '' | bash hooks/session-start.sh --format hermes
@@ -94,6 +111,21 @@ Expected: `{}` (not an error). Reason: `input="$(cat 2>/dev/null || true)"`.
 ---
 
 ## 3. Installer checks
+
+### 3.0. Marketplace installation in an isolated Claude config
+
+```bash
+VERIFY_CFG="$(mktemp -d)"
+CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin marketplace add "$PWD"
+CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin install choirboy-prompt@choirboy-prompt
+CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin list | grep 'Status: ✔ enabled'
+find "$VERIFY_CFG" -depth -delete
+```
+
+Expected: the marketplace is added, the plugin version is copied into the
+temporary cache, status is `enabled`, and there are no hook-load errors. Local
+`$PWD` is only for testing an unpublished working copy; the README's user path
+adds the same marketplace from GitHub.
 
 ### 3.1. --list
 
@@ -191,10 +223,11 @@ Expected: greps are empty; closure without BROKEN.
 ```bash
 bash -euo pipefail -c '
   bash hooks/session-start.sh --format claude | python3 -c "import json,sys; json.load(sys.stdin)" && echo "1 claude OK"
-  bash hooks/session-start.sh --format plain | grep -q "^# Prompt" && echo "2 plain OK"
-  SID=t-$(date +%s); printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":true}}" | bash hooks/session-start.sh --format hermes | grep -q context && echo "3 hermes first OK"
-  printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":false}}" | bash hooks/session-start.sh --format hermes | grep -q "^{}$" && echo "4 hermes second OK"
-  ./install.sh --list >/dev/null && echo "5 installer list OK"
+  claude plugin validate . >/dev/null && echo "2 manifests OK"
+  bash hooks/session-start.sh --format plain | grep "^# Prompt" >/dev/null && echo "3 plain OK"
+  SID=t-$(date +%s); printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":true}}" | bash hooks/session-start.sh --format hermes | python3 -c "import json,sys; assert \"context\" in json.load(sys.stdin)" && echo "4 hermes first OK"
+  printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":false}}" | bash hooks/session-start.sh --format hermes | grep -q "^{}$" && echo "5 hermes second OK"
+  ./install.sh --list >/dev/null && echo "6 installer list OK"
 '
 ```
 
@@ -202,7 +235,8 @@ bash -euo pipefail -c '
 
 ## 6. When to run
 
-- After any `hooks/session-start.sh` edit — §2.2–2.7.
+- After any `hooks/session-start.sh` edit — §2.2–2.8.
+- After editing `.claude-plugin/plugin.json` or `marketplace.json` — §2.1 and §3.0.
 - After an `install.sh` edit — §3.1–3.6.
 - After content-file edits — §4 (closure, sanitization).
 - After an `instruction_block` edit — grep by the marker in installed files

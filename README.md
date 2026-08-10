@@ -42,17 +42,54 @@ to the person that history describes.
 
 ## Quick start
 
-You need: Linux or macOS, `git`, `python3` (required by the installer; the hook
-itself works with `python3` or `jq`), and any of the five supported runtimes.
+Choose one of two installation paths. Claude Desktop users can install the
+plugin entirely inside the Code tab. The terminal installer remains available
+for Claude Code CLI and the other supported runtimes.
 
-### 1. Open a terminal
+### Install inside Claude Desktop
+
+You need the current Claude Desktop app on macOS or Windows. This installs the
+plugin into **Claude Desktop → Code** local and SSH sessions; it does not affect
+the regular Chat tab or remote Code sessions.
+
+1. Open Claude Desktop, select the **Code** tab, and start a local or SSH session.
+2. Send these commands as two separate messages:
+
+```text
+/plugin marketplace add howdeploy/choirboy-prompt
+/plugin install choirboy-prompt@choirboy-prompt
+```
+
+3. Start a new Code session. The `SessionStart` hook now injects the lore
+   automatically. After the marketplace is registered, the plugin also appears
+   under **+ → Plugins → Manage plugins**.
+
+To remove the in-app installation:
+
+```text
+/plugin uninstall choirboy-prompt@choirboy-prompt
+/plugin marketplace remove choirboy-prompt
+```
+
+The Claude hook needs only Bash. Claude Desktop uses the shell supplied with
+Git on Windows; Git is already required for local Code sessions.
+
+Use either this marketplace path or `./install.sh --target claude`, not both;
+enabling both would run the same `SessionStart` payload twice.
+
+### Install from a terminal
+
+You need Linux or macOS, `git`, `python3` (required by `install.sh`), and any of
+the five supported runtimes. On Windows, use WSL for this multi-runtime path.
+
+#### 1. Open a terminal
 
 - **macOS**: press `Cmd + Space`, type `Terminal`, press Enter.
 - **Linux**: press `Ctrl + Alt + T`, or find "Terminal" in the applications menu.
 - **Windows**: install [WSL](https://learn.microsoft.com/windows/wsl/install)
   first, then open "Ubuntu" from the Start menu. Run everything below inside WSL.
 
-### 2. Install git (skip if `git --version` prints a version)
+#### 2. Install git (skip if `git --version` prints a version)
 
 ```bash
 # Ubuntu / Debian / WSL:
@@ -68,7 +105,7 @@ xcode-select --install
 If `python3` is also missing (minimal systems), add it the same way:
 `sudo apt install -y python3`.
 
-### 3. Download and install
+#### 3. Download and install
 
 Copy these three lines one by one into the terminal:
 
@@ -86,7 +123,7 @@ To install into specific runtimes only:
 ./install.sh --target claude,codex   # targeted install
 ```
 
-### 4. Verify
+#### 4. Verify
 
 ```bash
 ./install.sh --list   # which runtimes were found and where the hook is installed
@@ -94,7 +131,7 @@ To install into specific runtimes only:
 
 Start a new session in your agent — the lore context is injected automatically.
 
-### Rollback
+#### Rollback
 
 ```bash
 ./install.sh --uninstall   # full rollback, nothing is left behind
@@ -102,9 +139,10 @@ Start a new session in your agent — the lore context is injected automatically
 
 > The repository ships the real lore files (`prompt.md` / `security-posture.md` /
 > `lore.md` / `user.md` / `research/`) — that is the demonstrated material itself.
-> For your own setup, replace them with yours: the hook reads files on the fly, no
-> reinstall is needed after content edits. Local backups created by install.sh
-> while editing runtime configs (`*.bak.*`) never enter the repository.
+> For your own terminal setup, replace them with yours: `install.sh` points at
+> the working copy, so content edits are read on the next session. Claude
+> marketplace installations use a cached release and update when the plugin
+> version is bumped. Local `*.bak.*` files never enter the repository.
 
 ## Why this exists
 
@@ -128,6 +166,7 @@ build detection (see [Disclosure and boundaries](#disclosure-and-boundaries)).
 | Claude/Codex format | SessionStart JSON (`hookSpecificOutput.additionalContext`) | `--format claude` |
 | Hermes format | `pre_llm_call` protocol: inject only on the first turn of a session, then `{}` | `--format hermes` |
 | Plain format | Raw text for runtimes that append hook stdout to the context | `--format plain` |
+| Claude Desktop install | Registers and installs the plugin from the Code tab | `.claude-plugin/marketplace.json` |
 | Multi-runtime install | Registers the hook in Claude Code, Codex, Hermes, Kimi Code, Gemini | `install.sh` |
 | Idempotency | All blocks are marked `agent-plugin:vibe-lore`; re-running duplicates nothing | markers `>>> / <<<` |
 | Backups and rollback | Every runtime config edit gets a timestamped backup; `--uninstall` removes blocks | `install.sh` |
@@ -179,7 +218,7 @@ the model reads the lore as ITS memory
 
 | Runtime | Hook point | Mechanics |
 |---|---|---|
-| Claude Code | `~/.claude/settings.json` | SessionStart hook, JSON reply |
+| Claude Code CLI / Desktop Code | plugin marketplace or `~/.claude/settings.json` | SessionStart hook, JSON reply |
 | Codex | `~/.codex/hooks.json` | SessionStart hook (needs `hooks = true` in `[features]`) |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent allowlist, first turn only |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart, plain output |
@@ -205,7 +244,7 @@ behavior: [docs/mechanism.en.md](docs/mechanism.en.md)):
 |---|---|
 | [Vector mechanics](docs/mechanism.en.md) | Fabricated-provenance trust step by step, trust transfer, classifier behavior |
 | [Architecture](docs/architecture.en.md) | Repo tree, payload anatomy, formats, Hermes protocol |
-| [Installer](docs/installer.en.md) | Targets, markers, idempotency, backups, `--instructions` |
+| [Installer](docs/installer.en.md) | Claude Desktop path, targets, markers, backups, `--instructions` |
 | [Security and disclosure](docs/security.en.md) | Research frame, sanitization checklist, responsible disclosure |
 | [Detection](docs/detection.en.md) | Vendor recommendations: memory canaries, context provenance |
 | [Testing](docs/testing.en.md) | Hook and installer checks, ad-hoc suite |
@@ -220,6 +259,9 @@ behavior: [docs/mechanism.en.md](docs/mechanism.en.md)):
   parallel starts can race.
 - The block in `GEMINI.md` and `--instructions` files is a static snapshot: after
   changing the plugin file list it must be reinstalled (`--uninstall` + install).
+- The in-app installer targets Claude Desktop's **Code** tab. The regular Chat
+  tab has no Claude Code `SessionStart` hooks, and plugins are unavailable in
+  remote Code sessions.
 - Vendor server classifiers flag defensive vocabulary regardless of the frame in
   context; one Claude flag poisons the whole session — the "new session" rule is
   described in [docs/security.en.md](docs/security.en.md).

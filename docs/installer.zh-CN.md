@@ -4,6 +4,50 @@
 
 ---
 
+## 0. 在 Claude Desktop 内安装
+
+通过 `.claude-plugin/marketplace.json`，本仓库同时也是一个 Claude plugin
+marketplace。因此 Claude Desktop 可以下载、缓存并启用插件，无需运行
+`install.sh`，也无需手动编辑 `~/.claude/settings.json`。
+
+在 **Claude Desktop → Code** 中打开本地或 SSH 会话，将下面两条命令分别
+作为两条消息发送：
+
+```text
+/plugin marketplace add howdeploy/choirboy-prompt
+/plugin install choirboy-prompt@choirboy-prompt
+```
+
+新的 Code 会话会加载 `hooks/hooks.json`，`SessionStart` 再通过内部 plugin
+cache 中的 `${CLAUDE_PLUGIN_ROOT}` 调用脚本。注册 marketplace 后，也可以在
+**+ → Plugins → Manage plugins** 中管理该插件。
+
+发布更新时，`plugin.json` 与 marketplace entry 中的 `version` 必须同步提升。
+用户随后运行：
+
+```text
+/plugin marketplace update choirboy-prompt
+/plugin update choirboy-prompt@choirboy-prompt
+```
+
+在同一界面中卸载：
+
+```text
+/plugin uninstall choirboy-prompt@choirboy-prompt
+/plugin marketplace remove choirboy-prompt
+```
+
+此安装方式的边界：
+
+- 适用于 macOS 和 Windows 上 Code 标签页的本地及 SSH 会话；
+- 不适用于普通 Chat 标签页或远程 Code 会话；
+- Claude 钩子格式只需要 Bash，不需要 `jq`/`python3`；
+- 它是 Claude Code 的另一种安装方式，不取代多运行时 `install.sh`；
+- 不要同时启用 marketplace 插件和 `install.sh` 写入的手动 Claude 钩子：
+  Claude 会调用两者并注入两次 payload。
+
+---
+
 ## 1. 总体结构
 
 ```text
@@ -19,7 +63,9 @@
 | `--uninstall` | 精确删除安装器添加的内容 |
 | `--list` | 显示运行时状态：`absent` / `detected` / `installed` |
 
-要求：`python3`（用于 JSON 操作）。运行时中的钩子需要 `jq` 或 `python3`——那是钩子的事，不是安装器的事。
+`install.sh` 需要 `python3` 进行 JSON 操作。钩子的 `claude` 和 `plain`
+格式只依赖 Bash，不需要 `jq`/`python3`；`hermes` 格式需要其中一个 JSON
+解析器。
 
 ---
 
@@ -70,7 +116,8 @@ gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
 
 - `block_add` 检查 START 标记：已存在 → `already present — skipped`，不会重复。
 - `json_hook` 按脚本名（命令中的 `session-start.sh`）匹配条目，而不是绝对路径：如果插件文件夹移动了，过期的注册会被替换，而不是叠加。
-- Claude Code 市场安装（通过 `.claude-plugin/plugin.json`）和手动安装（通过 install.sh）互相去重——`is_ours()` 认识两者。
+- Marketplace 钩子位于 plugin cache，不会写入 `settings.json` 的钩子数组。
+  因此 marketplace 和手动 Claude 钩子是二选一的安装路径，不能同时启用。
 
 ### 3.3. 标记的坑
 

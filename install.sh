@@ -183,10 +183,10 @@ entries = node.get(keys[-1])
 if not isinstance(entries, list):
     entries = []
 
-# A hook entry belongs to us if it runs our session-start.sh, regardless of the
-# absolute path (the plugin folder may move; Claude marketplace writes a
-# ${CLAUDE_PLUGIN_ROOT} variant). Matches by script name so install/uninstall
-# stay idempotent across moves and between the two install mechanisms.
+# A settings hook entry belongs to us if it runs our session-start.sh,
+# regardless of the absolute path (the plugin folder may move). This keeps the
+# manual installer idempotent across working-copy moves. Marketplace hooks are
+# resolved from the plugin cache and do not appear in this settings array.
 def is_ours(entry):
     if not isinstance(entry, dict):
         return False

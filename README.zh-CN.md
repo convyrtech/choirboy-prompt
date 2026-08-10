@@ -41,17 +41,52 @@ choirboy-prompt 是一个研究型 harness：SessionStart 钩子把固定 lore �
 
 ## 快速开始
 
-你需要：Linux 或 macOS、`git`、`python3`（安装器必需；钩子本身用 `python3`
-或 `jq` 均可），以及五种受支持运行时中的任意一种。
+有两种安装方式。Claude Desktop 用户可以完全在 Code 标签页内安装插件；
+终端安装器继续支持 Claude Code CLI 和其他受支持的运行时。
 
-### 1. 打开终端
+### 在 Claude Desktop 内安装
+
+需要 macOS 或 Windows 上的最新 Claude Desktop。此方式安装到
+**Claude Desktop → Code** 的本地会话和 SSH 会话；不会影响普通 Chat
+标签页，也不适用于远程 Code 会话。
+
+1. 打开 Claude Desktop，选择 **Code** 标签页并启动本地或 SSH 会话。
+2. 将下面两条命令分别作为两条消息发送：
+
+```text
+/plugin marketplace add howdeploy/choirboy-prompt
+/plugin install choirboy-prompt@choirboy-prompt
+```
+
+3. 启动新的 Code 会话。`SessionStart` 钩子会自动注入 lore。注册 marketplace
+   后，也可以在 **+ → Plugins → Manage plugins** 中管理该插件。
+
+从应用内卸载：
+
+```text
+/plugin uninstall choirboy-prompt@choirboy-prompt
+/plugin marketplace remove choirboy-prompt
+```
+
+Claude 钩子只需要 Bash。在 Windows 上，Claude Desktop 使用 Git 自带的
+shell；而本地 Code 会话本身就要求安装 Git。
+
+Marketplace 安装与 `./install.sh --target claude` 二选一；如果同时启用，
+同一个 `SessionStart` payload 会执行两次。
+
+### 从终端安装
+
+你需要 Linux 或 macOS、`git`、`python3`（`install.sh` 必需），以及五种
+受支持运行时中的任意一种。在 Windows 上，此多运行时安装方式使用 WSL。
+
+#### 1. 打开终端
 
 - **macOS**：按 `Cmd + Space`，输入 `Terminal`，回车。
 - **Linux**：按 `Ctrl + Alt + T`，或在应用菜单中找到「终端」。
 - **Windows**：先安装 [WSL](https://learn.microsoft.com/windows/wsl/install)，
   然后从开始菜单打开「Ubuntu」。以下所有命令都在 WSL 中执行。
 
-### 2. 安装 git（如果 `git --version` 能打印版本号则跳过）
+#### 2. 安装 git（如果 `git --version` 能打印版本号则跳过）
 
 ```bash
 # Ubuntu / Debian / WSL:
@@ -67,7 +102,7 @@ xcode-select --install
 如果连 `python3` 也没有（极简系统），同样安装：
 `sudo apt install -y python3`。
 
-### 3. 下载并安装
+#### 3. 下载并安装
 
 把下面三行逐条复制到终端中执行：
 
@@ -85,7 +120,7 @@ cd choirboy-prompt
 ./install.sh --target claude,codex   # 指定安装
 ```
 
-### 4. 验证
+#### 4. 验证
 
 ```bash
 ./install.sh --list   # 发现了哪些运行时、钩子安装在哪里
@@ -93,7 +128,7 @@ cd choirboy-prompt
 
 在你的智能体中开启一个新会话——lore 上下文会被自动注入。
 
-### 回滚
+#### 回滚
 
 ```bash
 ./install.sh --uninstall   # 完整回滚，不留任何痕迹
@@ -101,8 +136,9 @@ cd choirboy-prompt
 
 > 仓库包含真实的 lore 文件（`prompt.md` / `security-posture.md` /
 > `lore.md` / `user.md` / `research/`）——这正是被演示的材料本身。
-> 用于自己的环境时，把它们替换成你自己的：钩子会即时读取文件，修改内容后无需
-> 重新安装。install.sh 在修改运行时配置时创建的本地备份（`*.bak.*`）不会进入仓库。
+> 对于自己的终端安装，可将它们替换为自己的内容：`install.sh` 指向工作副本，
+> 下一次会话会读取修改。Claude marketplace 安装使用缓存版本，插件版本提升后才会
+> 更新。本地 `*.bak.*` 文件不会进入仓库。
 
 ## 为什么存在
 
@@ -123,6 +159,7 @@ cd choirboy-prompt
 | Claude/Codex 格式 | SessionStart JSON（`hookSpecificOutput.additionalContext`） | `--format claude` |
 | Hermes 格式 | `pre_llm_call` 协议：只在会话第一轮注入，之后返回 `{}` | `--format hermes` |
 | Plain 格式 | 供把钩子 stdout 追加进上下文的运行时使用 | `--format plain` |
+| Claude Desktop 安装 | 从 Code 标签页注册并安装插件 | `.claude-plugin/marketplace.json` |
 | 多运行时安装 | 在 Claude Code、Codex、Hermes、Kimi Code、Gemini 中注册钩子 | `install.sh` |
 | 幂等性 | 所有块都带 `agent-plugin:vibe-lore` 标记，重复运行不会重复 | 标记 `>>> / <<<` |
 | 备份与回滚 | 每次修改运行时配置都生成带时间戳的备份；`--uninstall` 删除块 | `install.sh` |
@@ -173,7 +210,7 @@ session-start.sh  (所选运行时的钩子)
 
 | 运行时 | 接入点 | 机制 |
 |---|---|---|
-| Claude Code | `~/.claude/settings.json` | SessionStart 钩子，JSON 响应 |
+| Claude Code CLI / Desktop Code | plugin marketplace 或 `~/.claude/settings.json` | SessionStart 钩子，JSON 响应 |
 | Codex | `~/.codex/hooks.json` | SessionStart 钩子（需在 `[features]` 中开启 `hooks = true`） |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + 授权白名单，仅第一轮 |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart，plain 输出 |
@@ -194,7 +231,7 @@ session-start.sh  (所选运行时的钩子)
 |---|---|
 | [向量机制](docs/mechanism.zh-CN.md) | 逐步拆解 fabricated-provenance trust、信任转移、分类器行为 |
 | [架构](docs/architecture.zh-CN.md) | 仓库结构、payload 解剖、格式、Hermes 协议 |
-| [安装器](docs/installer.zh-CN.md) | 目标、标记、幂等性、备份、`--instructions` |
+| [安装器](docs/installer.zh-CN.md) | Claude Desktop 路径、目标、标记、备份、`--instructions` |
 | [安全与披露](docs/security.zh-CN.md) | 研究框架、发布前清理清单、负责任披露 |
 | [检测](docs/detection.zh-CN.md) | 给厂商的建议：记忆金丝雀、上下文来源 |
 | [测试](docs/testing.zh-CN.md) | 钩子与安装器检查、临时测试套件 |
@@ -207,6 +244,8 @@ session-start.sh  (所选运行时的钩子)
 - Hermes 第一轮去重用的是 `/tmp` 中的原始 state 文件，没有锁；并行启动可能产生竞争。
 - `GEMINI.md` 和 `--instructions` 文件中的块是静态快照：修改插件文件列表后需要重新安装
   （`--uninstall` + install）。
+- 应用内安装器只适用于 Claude Desktop 的 **Code** 标签页。普通 Chat
+  没有 Claude Code `SessionStart` 钩子，远程 Code 会话也不支持插件。
 - 厂商服务端分类器会无视上下文中的框架标记防御性词汇；Claude 一次误报会毒化整个会话——
   「新会话」规则见 [docs/security.zh-CN.md](docs/security.zh-CN.md)。
 

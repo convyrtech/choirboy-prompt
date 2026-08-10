@@ -73,7 +73,8 @@ demonstrated material itself, but without identifying details.
 
 ### 3.3. Mechanics
 
-- [ ] The hook reads files on the fly — no reinstall needed after content edits.
+- [ ] Manual installation reads the working copy live; marketplace installation
+      uses a cache and receives edits only after a version bump.
 - [ ] The hook works without content files (graceful mode): in a fresh clone
       without `prompt.md`/`lore.md`/`user.md` it does not fail with
       `set -euo pipefail` — it skips missing files with a warning.
@@ -84,6 +85,8 @@ demonstrated material itself, but without identifying details.
 - [ ] `LICENSE` exists (README and badge reference it).
 - [ ] Manifest `.claude-plugin/plugin.json` renamed to the public name
       (`choirboy-prompt`), version bumped.
+- [ ] `.claude-plugin/marketplace.json` has the same version as `plugin.json`;
+      `claude plugin validate .` passes.
 - [ ] Old READMEs (EN/zh-CN) with the vibe-lore branding updated or removed —
       none of them in the public repo.
 - [ ] `assets/vibe-lore-hero.svg` — old branding; replaced or removed.

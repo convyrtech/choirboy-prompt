@@ -42,17 +42,56 @@ choirboy-prompt — исследовательский харнесс: SessionSt
 
 ## Быстрый старт
 
-Нужно: Linux или macOS, `git`, `python3` (обязателен для установщика; сам хук
-работает и с `python3`, и с `jq`), и любой из пяти поддерживаемых рантаймов.
+Есть два пути установки. Пользователь Claude Desktop может поставить плагин
+целиком внутри вкладки Code. Терминальный установщик остаётся для Claude Code
+CLI и остальных поддерживаемых рантаймов.
 
-### 1. Открой терминал
+### Установка внутри Claude Desktop
+
+Нужна актуальная версия Claude Desktop для macOS или Windows. Плагин ставится в
+локальные и SSH-сессии **Claude Desktop → Code**; обычную вкладку Chat и
+удалённые Code-сессии эта установка не затрагивает.
+
+1. Открой Claude Desktop, выбери вкладку **Code** и запусти локальную или
+   SSH-сессию.
+2. Отправь эти команды двумя отдельными сообщениями:
+
+```text
+/plugin marketplace add howdeploy/choirboy-prompt
+/plugin install choirboy-prompt@choirboy-prompt
+```
+
+3. Запусти новую Code-сессию. `SessionStart`-хук автоматически подмешает лор.
+   После регистрации marketplace плагин также появится в меню
+   **+ → Plugins → Manage plugins**.
+
+Удаление установки из приложения:
+
+```text
+/plugin uninstall choirboy-prompt@choirboy-prompt
+/plugin marketplace remove choirboy-prompt
+```
+
+Claude-хуку нужен только Bash. В Windows Claude Desktop использует shell из
+Git, который и так обязателен для локальных Code-сессий.
+
+Используй либо этот marketplace-путь, либо `./install.sh --target claude`:
+если включить оба, один `SessionStart`-пейлоад выполнится дважды.
+
+### Установка из терминала
+
+Нужно: Linux или macOS, `git`, `python3` (обязателен для `install.sh`) и любой
+из пяти поддерживаемых рантаймов. В Windows для этого мультирантаймового пути
+используй WSL.
+
+#### 1. Открой терминал
 
 - **macOS**: нажми `Cmd + Space`, набери `Terminal`, нажми Enter.
 - **Linux**: нажми `Ctrl + Alt + T` или найди «Терминал» в меню приложений.
 - **Windows**: сначала поставь [WSL](https://learn.microsoft.com/windows/wsl/install),
   затем открой «Ubuntu» из меню «Пуск». Все команды ниже выполняются внутри WSL.
 
-### 2. Установи git (пропусти, если `git --version` печатает версию)
+#### 2. Установи git (пропусти, если `git --version` печатает версию)
 
 ```bash
 # Ubuntu / Debian / WSL:
@@ -68,7 +107,7 @@ xcode-select --install
 Если `python3` тоже нет (минимальные системы), поставь его так же:
 `sudo apt install -y python3`.
 
-### 3. Скачай и установи
+#### 3. Скачай и установи
 
 Скопируй эти три строки в терминал по очереди:
 
@@ -86,7 +125,7 @@ cd choirboy-prompt
 ./install.sh --target claude,codex   # точечная установка
 ```
 
-### 4. Проверь
+#### 4. Проверь
 
 ```bash
 ./install.sh --list   # какие рантаймы найдены и куда установлен хук
@@ -94,7 +133,7 @@ cd choirboy-prompt
 
 Запусти новую сессию своего агента — лор-контекст подмешается автоматически.
 
-### Откат
+#### Откат
 
 ```bash
 ./install.sh --uninstall   # полный откат, следов не остаётся
@@ -102,9 +141,10 @@ cd choirboy-prompt
 
 > Репозиторий содержит реальные лор-файлы (`prompt.md` / `security-posture.md` /
 > `lore.md` / `user.md` / `research/`) — это и есть демонстрируемый материал.
-> Для своей установки замени их своими: хук читает файлы на лету, переустановка
-> после правок контента не нужна. Локальные бэкапы, которые install.sh делает
-> при правке конфигов рантаймов (`*.bak.*`), в репозиторий не попадают.
+> Для своей терминальной установки замени их своими: `install.sh` ссылается на
+> рабочую копию, поэтому правки подхватятся в следующей сессии. Установка через
+> Claude marketplace работает из кэша и обновляется после повышения версии
+> плагина. Локальные `*.bak.*` в репозиторий не попадают.
 
 ## Зачем это существует
 
@@ -128,6 +168,7 @@ cd choirboy-prompt
 | Формат Claude/Codex | SessionStart JSON (`hookSpecificOutput.additionalContext`) | `--format claude` |
 | Формат Hermes | Протокол `pre_llm_call`: инъекция только на первом ходу сессии, далее `{}` | `--format hermes` |
 | Формат plain | Сырой текст для рантаймов, добавляющих stdout хука в контекст | `--format plain` |
+| Установка в Claude Desktop | Регистрирует и ставит плагин из вкладки Code | `.claude-plugin/marketplace.json` |
 | Мульти-рантайм установка | Регистрирует хук в Claude Code, Codex, Hermes, Kimi Code, Gemini | `install.sh` |
 | Идемпотентность | Все блоки помечены `agent-plugin:vibe-lore`, повторный запуск ничего не дублирует | маркеры `>>> / <<<` |
 | Бэкапы и откат | Каждая правка конфига рантайма — с timestamp-бэкапом; `--uninstall` удаляет блоки | `install.sh` |
@@ -179,7 +220,7 @@ session-start.sh  (hook выбранного рантайма)
 
 | Рантайм | Точка подключения | Механика |
 |---|---|---|
-| Claude Code | `~/.claude/settings.json` | SessionStart hook, JSON-ответ |
+| Claude Code CLI / Desktop Code | plugin marketplace или `~/.claude/settings.json` | SessionStart hook, JSON-ответ |
 | Codex | `~/.codex/hooks.json` | SessionStart hook (нужен `hooks = true` в `[features]`) |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent-allowlist, только первый ход |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart, plain-вывод |
@@ -204,7 +245,7 @@ session-start.sh  (hook выбранного рантайма)
 |---|---|
 | [Механика вектора](docs/mechanism.md) | Fabricated-provenance trust по шагам, перенос доверия, поведение классификаторов |
 | [Архитектура](docs/architecture.md) | Дерево репо, анатомия пейлоада, форматы, протокол Hermes |
-| [Установщик](docs/installer.md) | Таргеты, маркеры, идемпотентность, бэкапы, `--instructions` |
+| [Установщик](docs/installer.md) | Путь Claude Desktop, таргеты, маркеры, бэкапы, `--instructions` |
 | [Безопасность и раскрытие](docs/security.md) | Рамка исследования, чек-лист санитизации, ответственное раскрытие |
 | [Детекция](docs/detection.md) | Рекомендации вендорам: канарейки в памяти, провенанс контекста |
 | [Тестирование](docs/testing.md) | Проверки хука и установщика, ad-hoc сьют |
@@ -219,6 +260,9 @@ session-start.sh  (hook выбранного рантайма)
   блокировок; при параллельных стартах возможны гонки.
 - Блок в `GEMINI.md` и файлах `--instructions` — статический снимок: после
   изменения списка файлов плагина его надо переставить (`--uninstall` + install).
+- Установщик внутри приложения работает во вкладке **Code** Claude Desktop.
+  В обычном Chat нет хуков Claude Code `SessionStart`, а в удалённых
+  Code-сессиях плагины недоступны.
 - Серверные классификаторы вендоров флагают защитную лексику независимо от
   рамки в контексте; одно срабатывание у Claude отравляет всю сессию — правило
   «новая сессия» описано в [docs/security.md](docs/security.md).

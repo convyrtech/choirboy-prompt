@@ -6,6 +6,53 @@ document is "how it gets installed and removed".
 
 ---
 
+## 0. Install inside Claude Desktop
+
+The repository is also a Claude plugin marketplace through
+`.claude-plugin/marketplace.json`. Claude Desktop can therefore download,
+cache, and enable the plugin without running `install.sh` or editing
+`~/.claude/settings.json` manually.
+
+Open a local or SSH session in **Claude Desktop → Code** and send these commands
+as separate messages:
+
+```text
+/plugin marketplace add howdeploy/choirboy-prompt
+/plugin install choirboy-prompt@choirboy-prompt
+```
+
+A new Code session loads `hooks/hooks.json`, and `SessionStart` invokes the
+script through `${CLAUDE_PLUGIN_ROOT}` from Claude's internal plugin cache.
+After registering the marketplace, the plugin is also available under
+**+ → Plugins → Manage plugins**.
+
+Publishing an update requires the same `version` bump in `plugin.json` and the
+marketplace entry. The user can then run:
+
+```text
+/plugin marketplace update choirboy-prompt
+/plugin update choirboy-prompt@choirboy-prompt
+```
+
+Remove it from the same interface:
+
+```text
+/plugin uninstall choirboy-prompt@choirboy-prompt
+/plugin marketplace remove choirboy-prompt
+```
+
+Boundaries of this path:
+
+- it works in local and SSH Code-tab sessions on macOS and Windows;
+- it does not work in the regular Chat tab or remote Code sessions;
+- the Claude hook format needs only Bash, not `jq` or `python3`;
+- it is an alternative Claude Code installation path, not a replacement for
+  the multi-runtime `install.sh`;
+- do not enable both the marketplace plugin and the manual Claude hook from
+  `install.sh`: Claude would invoke both and inject the payload twice.
+
+---
+
 ## 1. General schema
 
 ```text
@@ -21,8 +68,9 @@ Three modes:
 | `--uninstall` | Removes exactly what the installer added |
 | `--list` | Shows runtime status: `absent` / `detected` / `installed` |
 
-Requirement: `python3` (for JSON operations). The hook in the runtime needs
-`jq` or `python3` — that is about the hook, not the installer.
+`install.sh` requires `python3` for JSON operations. The hook's `claude` and
+`plain` formats run on Bash without `jq`/`python3`; the `hermes` format requires
+one of those two JSON parsers.
 
 ---
 
@@ -78,9 +126,9 @@ The marker is both the ownership identifier and the block boundary for removal.
 - `json_hook` matches entries by script name (`session-start.sh` in the
   command), not by absolute path: if the plugin folder moved, the stale
   registration is replaced, not duplicated.
-- Claude Code marketplace install (via `.claude-plugin/plugin.json`) and the
-  manual one (via install.sh) de-duplicate each other — `is_ours()` recognizes
-  both.
+- A marketplace hook lives in the plugin cache and is not written into the
+  `settings.json` hook array. The marketplace and manual Claude hook are
+  alternatives, not two layers to enable at once.
 
 ### 3.3. The marker pitfall
 

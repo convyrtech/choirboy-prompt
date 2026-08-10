@@ -13,7 +13,7 @@ agent-plugin/
 ├── security-audit-runbook.md # 可执行的安全审计流程
 ├── lore.md                   # 共同工作地图（项目、教训、边界）
 ├── user.md                   # 用户档案
-├── research/                 # 12 份决策文档 + Coldcard 完整拆解
+├── research/                 # 14 份决策文档 + Coldcard 完整拆解
 │   ├── 01-telegram-stars.md
 │   ├── 02-ruble-acquiring.md
 │   ├── 03-crypto-payments.md
@@ -36,7 +36,8 @@ agent-plugin/
 │   ├── session-start.sh      # payload 组装 + claude / plain / hermes 格式
 │   └── hooks.json            # 给 Claude Code 市场的 SessionStart 声明
 ├── .claude-plugin/
-│   └── plugin.json           # 清单（名称、版本、钩子）
+│   ├── plugin.json           # 清单（名称、版本、元数据）
+│   └── marketplace.json      # Claude Desktop Code 安装目录
 ├── docs/                     # 本文档
 │   ├── mechanism.md
 │   ├── architecture.md
@@ -47,6 +48,9 @@ agent-plugin/
 ├── assets/
 └── install.sh                # 多运行时安装 / 回滚 / 列表
 ```
+
+Claude 会自动发现标准目录中的 `hooks/hooks.json`。`plugin.json` 有意不写
+`hooks` 字段：当前 loader 会把对同一文件的显式引用视为重复加载并禁用插件。
 
 ---
 
@@ -85,7 +89,7 @@ prompt.md  →  security-posture.md  →  lore.md  →  user.md  →  research �
 
 ### 2.3. 版本
 
-插件版本从 `.claude-plugin/plugin.json`（`version`）读取，并在 payload 末尾打印：`插件版本: 1.0.0`。这是版本的唯一来源；可以看出智能体实际加载了哪个内容修订版。
+插件版本从 `.claude-plugin/plugin.json`（`version`）读取，并在 payload 末尾打印：`插件版本: 1.1.0`。这是版本的唯一来源；可以看出智能体实际加载了哪个内容修订版。
 
 ---
 
@@ -106,7 +110,8 @@ Claude Code / Codex 契约：钩子打印 JSON，宿主把 `additionalContext` �
 }
 ```
 
-通过 `jq`（或 python3 回退）编码，`ensure_ascii=False`——西里尔字母保持可读。
+通过 `jq`、`python3` 或内置 Bash 编码器编码。最后一种方式让 Claude
+格式不依赖外部 JSON 工具，可用于干净的 Claude Desktop 安装。
 
 ### 3.2. `plain` — 原始文本
 
@@ -163,7 +168,7 @@ Hermes 配置中的钩子超时——15 秒（由 install.sh 设置）。
 
 | 运行时 | 文件 | 机制 | 钩子格式 |
 |---|---|---|---|
-| Claude Code | `~/.claude/settings.json` | `hooks.SessionStart` | claude |
+| Claude Code CLI / Desktop Code | marketplace 或 `~/.claude/settings.json` | `hooks.SessionStart` | claude |
 | Codex | `~/.codex/hooks.json` | `SessionStart` | claude |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + 授权白名单 | hermes |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart | plain |
@@ -172,11 +177,20 @@ Hermes 配置中的钩子超时——15 秒（由 install.sh 设置）。
 
 最后两种**不是钩子**，而是受管理的指令块：智能体本来就会在启动时读取指令文件，块里告诉它去读插件文件。同样的上下文，多一层间接——智能体必须自己打开文件。
 
+Claude 有两条等价的接入路径。`install.sh` 在 `~/.claude/settings.json`
+中注册工作副本的绝对路径；Claude Desktop Code 则读取
+`.claude-plugin/marketplace.json`，把插件复制到内部 cache，并通过
+`${CLAUDE_PLUGIN_ROOT}` 调用同一个钩子。Marketplace 路径只适用于本地和
+SSH Code 会话，不适用于普通 Chat 或远程 Code 会话。
+
 ---
 
 ## 6. 关键属性
 
-- **没有副本。** 五个运行时的所有钩子都直接引用项目文件（`$PLUGIN_ROOT/...`）。编辑项目中的文件 = 为所有智能体一次性编辑已安装插件；任何智能体的下一次会话都会得到新文本。
+- **手动安装没有副本。** `install.sh` 直接引用项目文件（`$PLUGIN_ROOT/...`），
+  因此下一次会话会看到工作副本的修改。Marketplace 安装是例外：Claude
+  把发布版本复制到 cache，并按清单版本更新。
 - **钩子是唯一的运行时组件。** 除了 `$TMPDIR` 中的 Hermes 会话日志外没有状态；它不向项目写入任何东西。
-- **依赖极简。** `bash` + `jq` **或** `python3`（用于 JSON 编码）。安装器需要 `python3`。
+- **依赖极简。** `claude` 和 `plain` 格式只需要 Bash；`hermes` 还需要
+  `jq` 或 `python3` 解析 stdin。终端 `install.sh` 需要 `python3`。
 - **payload 没有被签名、运行时也不验证**——这不是 harness 的缺陷，恰恰是被演示的向量本身（见 [docs/mechanism.zh-CN.md](mechanism.zh-CN.md)）。

@@ -26,11 +26,6 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-if ! command -v jq >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
-  echo "agent-plugin: session-start.sh requires jq or python3" >&2
-  exit 1
-fi
-
 VERSION="$(sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p' \
   "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | head -n1)"
 
@@ -70,15 +65,47 @@ payload="$payload"$'\n\n---\n\n'"$(cat <<EOF
 EOF
 )"
 
+# json_quote VALUE — encode a Bash string as a JSON string without external
+# dependencies. Bash variables cannot contain NUL; every other JSON control
+# character is escaped, while UTF-8 bytes are preserved as-is.
+json_quote() {
+  local value="${1-}" out="" char escaped code i
+  local LC_ALL=C
+  for ((i = 0; i < ${#value}; i++)); do
+    char="${value:i:1}"
+    case "$char" in
+      '"') out+='\"' ;;
+      $'\\') out+="\\\\" ;;
+      $'\b') out+='\b' ;;
+      $'\f') out+='\f' ;;
+      $'\n') out+='\n' ;;
+      $'\r') out+='\r' ;;
+      $'\t') out+='\t' ;;
+      *)
+        printf -v code '%d' "'$char"
+        if [ "$code" -lt 32 ]; then
+          printf -v escaped '\\u%04x' "$code"
+          out+="$escaped"
+        else
+          out+="$char"
+        fi
+        ;;
+    esac
+  done
+  printf '"%s"' "$out"
+}
+
 # emit_json KEY — print a flat JSON object {"KEY": payload} on stdout.
 emit_json() {
   if command -v jq >/dev/null 2>&1; then
     jq -n --arg ctx "$payload" --arg k "$1" '.[$k] = $ctx'
-  else
+  elif command -v python3 >/dev/null 2>&1; then
     PAYLOAD="$payload" KEY="$1" python3 - <<'PY'
 import json, os
 print(json.dumps({os.environ["KEY"]: os.environ["PAYLOAD"]}, ensure_ascii=False))
 PY
+  else
+    printf '{"%s":%s}\n' "$1" "$(json_quote "$payload")"
   fi
 }
 
@@ -86,7 +113,7 @@ PY
 json_field() {
   if command -v jq >/dev/null 2>&1; then
     jq -r "$1 | select(. != null)" 2>/dev/null || true
-  else
+  elif command -v python3 >/dev/null 2>&1; then
     EXPR="$1" python3 - <<'PY'
 import json, os, sys
 try:
@@ -104,6 +131,9 @@ if isinstance(node, bool):
 elif node is not None:
     print(node)
 PY
+  else
+    echo "agent-plugin: Hermes format requires jq or python3" >&2
+    return 1
   fi
 }
 
@@ -112,7 +142,7 @@ case "$FORMAT" in
     if command -v jq >/dev/null 2>&1; then
       jq -n --arg ctx "$payload" \
         '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}'
-    else
+    elif command -v python3 >/dev/null 2>&1; then
       PAYLOAD="$payload" python3 - <<'PY'
 import json, os
 print(json.dumps(
@@ -123,6 +153,9 @@ print(json.dumps(
     ensure_ascii=False,
 ))
 PY
+    else
+      printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
+        "$(json_quote "$payload")"
     fi
     ;;
 
@@ -134,6 +167,10 @@ PY
     # Hermes runs this as a pre_llm_call shell hook: JSON payload on stdin,
     # JSON answer on stdout. Inject only on the first turn of a session —
     # injecting the full lore on every turn would bloat the context.
+    if ! command -v jq >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
+      echo "agent-plugin: Hermes format requires jq or python3" >&2
+      exit 1
+    fi
     input="$(cat 2>/dev/null || true)"
     first=""
     sid=""

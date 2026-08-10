@@ -6,6 +6,52 @@
 
 ---
 
+## 0. Установка внутри Claude Desktop
+
+Репозиторий одновременно является Claude plugin marketplace благодаря
+`.claude-plugin/marketplace.json`. Поэтому Claude Desktop может скачать,
+закэшировать и включить плагин без запуска `install.sh` и ручной правки
+`~/.claude/settings.json`.
+
+Во вкладке **Claude Desktop → Code** открой локальную или SSH-сессию и отправь
+две команды отдельными сообщениями:
+
+```text
+/plugin marketplace add howdeploy/choirboy-prompt
+/plugin install choirboy-prompt@choirboy-prompt
+```
+
+Новая Code-сессия загрузит `hooks/hooks.json`, а `SessionStart` вызовет скрипт
+через `${CLAUDE_PLUGIN_ROOT}` из внутреннего plugin cache. После регистрации
+marketplace плагин доступен и через **+ → Plugins → Manage plugins**.
+
+Обновление опубликованной версии требует одинакового повышения `version` в
+`plugin.json` и marketplace entry. Пользователь затем выполняет:
+
+```text
+/plugin marketplace update choirboy-prompt
+/plugin update choirboy-prompt@choirboy-prompt
+```
+
+Удаление выполняется там же:
+
+```text
+/plugin uninstall choirboy-prompt@choirboy-prompt
+/plugin marketplace remove choirboy-prompt
+```
+
+Границы этого пути:
+
+- работает в локальных и SSH-сессиях вкладки Code на macOS и Windows;
+- не работает в обычной вкладке Chat и удалённых Code-сессиях;
+- Claude-формату хука нужен только Bash; `jq`/`python3` для него не нужны;
+- это альтернативный путь установки Claude Code, а не замена
+  мультирантаймовому `install.sh`;
+- не включай одновременно marketplace-плагин и ручной Claude-хук из
+  `install.sh`: Claude вызовет оба и внедрит пейлоад дважды.
+
+---
+
 ## 1. Общая схема
 
 ```text
@@ -21,8 +67,9 @@
 | `--uninstall` | Удаляет ровно то, что добавил установщик |
 | `--list` | Показывает статус рантаймов: `absent` / `detected` / `installed` |
 
-Требование: `python3` (для JSON-операций). Хук в рантайме требует
-`jq` или `python3` — это уже про хук, не про установщик.
+Требование `install.sh`: `python3` для JSON-операций. Форматы хука `claude` и
+`plain` работают на Bash без `jq`/`python3`; формат `hermes` требует один из
+этих двух JSON-парсеров.
 
 ---
 
@@ -78,9 +125,9 @@ gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
 - `json_hook` матчит записи по имени скрипта (`session-start.sh` в
   команде), а не по абсолютному пути: если папка плагина переехала,
   устаревшая регистрация заменяется, а не кладётся вторая.
-- Маркетплейс-установка Claude Code (через `.claude-plugin/plugin.json`)
-  и ручная (через install.sh) дедуплицируют друг друга — `is_ours()`
-  узнаёт обе.
+- Marketplace-хук живёт в plugin cache и не записывается в массив хуков
+  `settings.json`. Поэтому marketplace и ручной Claude-хук — альтернативы, а
+  не два одновременно включаемых слоя.
 
 ### 3.3. Питфолл маркеров
 

@@ -14,7 +14,7 @@ agent-plugin/
 ├── security-audit-runbook.md # executable security-audit procedure
 ├── lore.md                   # joint-work map (projects, lessons, boundaries)
 ├── user.md                   # user profile
-├── research/                 # 12 decision docs + full Coldcard teardown
+├── research/                 # 14 decision docs + full Coldcard teardown
 │   ├── 01-telegram-stars.md
 │   ├── 02-ruble-acquiring.md
 │   ├── 03-crypto-payments.md
@@ -37,7 +37,8 @@ agent-plugin/
 │   ├── session-start.sh      # payload assembly + claude / plain / hermes formats
 │   └── hooks.json            # SessionStart declaration for the Claude Code marketplace
 ├── .claude-plugin/
-│   └── plugin.json           # manifest (name, version, hooks)
+│   ├── plugin.json           # manifest (name, version, metadata)
+│   └── marketplace.json      # catalog for Claude Desktop Code installation
 ├── docs/                     # this documentation
 │   ├── mechanism.md
 │   ├── architecture.md
@@ -48,6 +49,11 @@ agent-plugin/
 ├── assets/
 └── install.sh                # multi-runtime install / rollback / list
 ```
+
+Claude auto-discovers `hooks/hooks.json` in its standard directory. The
+`plugin.json` intentionally has no `hooks` field: explicitly pointing to the
+same file is treated as a duplicate load by the current loader and disables the
+plugin.
 
 ---
 
@@ -96,7 +102,7 @@ Research-document bodies (~61 KB) are not part of the payload — only the index
 ### 2.3. Version
 
 The plugin version is read from `.claude-plugin/plugin.json` (`version`) and
-printed at the end of the payload: `Plugin version: 1.0.0`. This is the single
+printed at the end of the payload: `Plugin version: 1.1.0`. This is the single
 source of the version; it shows which content revision the agent actually loaded.
 
 ---
@@ -120,8 +126,9 @@ Claude Code / Codex contract: the hook prints JSON, the host pours
 }
 ```
 
-Encoded via `jq` (or a python3 fallback), `ensure_ascii=False` — Cyrillic stays
-readable.
+Encoded through `jq`, `python3`, or the built-in Bash encoder. The last option
+makes the Claude format independent of an external JSON tool and supports a
+clean Claude Desktop installation.
 
 ### 3.2. `plain` — raw text
 
@@ -182,7 +189,7 @@ Hook timeout in the Hermes config — 15 seconds (set by install.sh).
 
 | Runtime | File | Mechanism | Hook format |
 |---|---|---|---|
-| Claude Code | `~/.claude/settings.json` | `hooks.SessionStart` | claude |
+| Claude Code CLI / Desktop Code | marketplace or `~/.claude/settings.json` | `hooks.SessionStart` | claude |
 | Codex | `~/.codex/hooks.json` | `SessionStart` | claude |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent allowlist | hermes |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart | plain |
@@ -194,18 +201,26 @@ reads the instruction file at start, and the block tells it to read the plugin
 files. Same context, one indirection further — the agent must open the files
 itself.
 
+Claude has two equivalent connection paths. `install.sh` registers an absolute
+working-copy path in `~/.claude/settings.json`; the Claude Desktop Code path
+reads `.claude-plugin/marketplace.json`, copies the plugin into its internal
+cache, and invokes the same hook through `${CLAUDE_PLUGIN_ROOT}`. The marketplace
+path is available only in local and SSH Code sessions, not regular Chat or
+remote Code sessions.
+
 ---
 
 ## 6. Key properties
 
-- **No copies.** All hooks of all five runtimes reference the project files
-  directly (`$PLUGIN_ROOT/...`). Editing a file in the project = editing the
-  installed plugin for all agents at once; the next session of any agent gets the
-  new text.
+- **No copies for manual installs.** `install.sh` references project files
+  directly (`$PLUGIN_ROOT/...`), so the next session sees working-copy edits.
+  Marketplace installation is the exception: Claude copies the release into
+  its cache and updates it by manifest version.
 - **The hook is the only runtime component.** It has no state except the Hermes
   session journal in `$TMPDIR`; it writes nothing into the project.
-- **Minimal dependencies.** `bash` + `jq` **or** `python3` (for JSON encoding).
-  The installer needs `python3`.
+- **Minimal dependencies.** The `claude` and `plain` formats require only Bash;
+  `hermes` additionally needs `jq` or `python3` to parse stdin. The terminal
+  `install.sh` needs `python3`.
 - **The payload is not signed and not verified** by runtimes — this is not a
   harness bug, it is exactly the demonstrated vector (see
   [docs/mechanism.en.md](mechanism.en.md)).

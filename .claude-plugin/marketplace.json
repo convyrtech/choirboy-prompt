@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "choirboy-prompt",
+  "owner": {
+    "name": "howdeploy"
+  },
+  "description": "Defensive research plugins by howdeploy.",
+  "plugins": [
+    {
+      "name": "choirboy-prompt",
+      "source": "./",
+      "description": "Injects a fixed lore into each Claude Code session to reproduce and study fabricated-provenance trust.",
+      "version": "1.1.0",
+      "author": {
+        "name": "howdeploy"
+      },
+      "homepage": "https://github.com/howdeploy/choirboy-prompt",
+      "repository": "https://github.com/howdeploy/choirboy-prompt",
+      "license": "MIT",
+      "keywords": [
+        "memory",
+        "lore",
+        "prompt-injection",
+        "security-research"
+      ]
+    }
+  ]
+}

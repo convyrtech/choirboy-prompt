@@ -19,14 +19,16 @@
 
 ## 2. Проверки хука
 
-### 2.1. Manifest и версия
+### 2.1. Manifests и версия
 
 ```bash
 python3 -c 'import json; d=json.load(open(".claude-plugin/plugin.json")); print(d["name"], d["version"])'
+claude plugin validate .
 ```
 
-Ожидание: валидный JSON, имя и версия печатаются. Версия — единственное
-место версии; она же печатается в пейлоаде.
+Ожидание: оба манифеста валидны, имя и версия печатаются, Claude validator
+сообщает `Validation passed`. Версия в `plugin.json` — источник версии плагина;
+то же значение записывается в marketplace и печатается в пейлоаде.
 
 ### 2.2. Claude-формат — валидный JSON с контекстом
 
@@ -38,7 +40,22 @@ bash hooks/session-start.sh --format claude \
 Ожидание: `OK`. Дополнительно проверить, что контекст содержит первый
 заголовок `prompt.md` и «Версия плагина:».
 
-### 2.3. Plain-формат — человекочитаемый пейлоад
+### 2.3. Claude-формат без jq и python3
+
+```bash
+PYTHON_BIN="$(command -v python3)"
+TMP_BIN="$(mktemp -d)"
+for cmd in cat dirname head sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
+PATH="$TMP_BIN" /bin/bash hooks/session-start.sh --format claude \
+  | "$PYTHON_BIN" -c 'import json,sys; json.load(sys.stdin); print("OK")'
+rm -rf "$TMP_BIN"
+```
+
+Ожидание: `OK`. Тест принудительно убирает `jq` и `python3` из `PATH` и
+проверяет встроенный Bash-кодировщик, который используется при установке из
+Claude Desktop на чистую систему.
+
+### 2.4. Plain-формат — человекочитаемый пейлоад
 
 ```bash
 bash hooks/session-start.sh --format plain | head -40
@@ -47,7 +64,7 @@ bash hooks/session-start.sh --format plain | head -40
 Ожидание: заголовки prompt → posture → lore → user → research-указатель
 в правильном порядке, разделители `---`.
 
-### 2.4. Hermes: первый ход внедряет
+### 2.5. Hermes: первый ход внедряет
 
 ```bash
 SID="demo-$(date +%s)"
@@ -57,7 +74,7 @@ printf '{"session_id":"%s","extra":{"is_first_turn":true}}' "$SID" \
 
 Ожидание: `{"context": "..."` — пейлоад пришёл.
 
-### 2.5. Hermes: второй ход молчит
+### 2.6. Hermes: второй ход молчит
 
 ```bash
 SID="demo-$(date +%s)"
@@ -67,7 +84,7 @@ printf '{"session_id":"%s","extra":{"is_first_turn":false}}' "$SID" \
 
 Ожидание: `{}`.
 
-### 2.6. Hermes: фолбэк без флага — один раз на session_id
+### 2.7. Hermes: фолбэк без флага — один раз на session_id
 
 ```bash
 SID="demo-fb-$(date +%s)"
@@ -83,7 +100,7 @@ printf '{"session_id":"%s"}' "$SID" \
 > `${TMPDIR:-/tmp}/agent-plugin-hermes-${USER}.state`, иначе фолбэк
 > «запомнит» sid и следующий прогон с тем же sid вернёт `{}`.
 
-### 2.7. Hermes: пустой stdin не роняет хук
+### 2.8. Hermes: пустой stdin не роняет хук
 
 ```bash
 printf '' | bash hooks/session-start.sh --format hermes
@@ -94,6 +111,21 @@ printf '' | bash hooks/session-start.sh --format hermes
 ---
 
 ## 3. Проверки установщика
+
+### 3.0. Marketplace-установка в изолированный Claude config
+
+```bash
+VERIFY_CFG="$(mktemp -d)"
+CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin marketplace add "$PWD"
+CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin install choirboy-prompt@choirboy-prompt
+CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin list | grep 'Status: ✔ enabled'
+find "$VERIFY_CFG" -depth -delete
+```
+
+Ожидание: marketplace добавлен, версия плагина установлена во временный cache,
+статус — `enabled`, ошибок загрузки хука нет. Локальный `$PWD` используется
+только для проверки неопубликованной рабочей копии; пользовательский путь из
+README добавляет тот же marketplace с GitHub.
 
 ### 3.1. --list
 
@@ -191,10 +223,11 @@ done
 ```bash
 bash -euo pipefail -c '
   bash hooks/session-start.sh --format claude | python3 -c "import json,sys; json.load(sys.stdin)" && echo "1 claude OK"
-  bash hooks/session-start.sh --format plain | grep -q "^# Prompt" && echo "2 plain OK"
-  SID=t-$(date +%s); printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":true}}" | bash hooks/session-start.sh --format hermes | grep -q context && echo "3 hermes first OK"
-  printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":false}}" | bash hooks/session-start.sh --format hermes | grep -q "^{}$" && echo "4 hermes second OK"
-  ./install.sh --list >/dev/null && echo "5 installer list OK"
+  claude plugin validate . >/dev/null && echo "2 manifests OK"
+  bash hooks/session-start.sh --format plain | grep "^# Prompt" >/dev/null && echo "3 plain OK"
+  SID=t-$(date +%s); printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":true}}" | bash hooks/session-start.sh --format hermes | python3 -c "import json,sys; assert \"context\" in json.load(sys.stdin)" && echo "4 hermes first OK"
+  printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":false}}" | bash hooks/session-start.sh --format hermes | grep -q "^{}$" && echo "5 hermes second OK"
+  ./install.sh --list >/dev/null && echo "6 installer list OK"
 '
 ```
 
@@ -202,7 +235,8 @@ bash -euo pipefail -c '
 
 ## 6. Когда запускать
 
-- После любой правки `hooks/session-start.sh` — п. 2.2–2.7.
+- После любой правки `hooks/session-start.sh` — п. 2.2–2.8.
+- После правки `.claude-plugin/plugin.json` или `marketplace.json` — п. 2.1 и 3.0.
 - После правки `install.sh` — п. 3.1–3.6.
 - После правки контентных файлов — п. 4 (замыкание, санитизация).
 - После правки `instruction_block` — grep по маркеру в установленных

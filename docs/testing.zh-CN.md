@@ -19,9 +19,12 @@
 
 ```bash
 python3 -c 'import json; d=json.load(open(".claude-plugin/plugin.json")); print(d["name"], d["version"])'
+claude plugin validate .
 ```
 
-预期：有效 JSON，打印名称和版本。版本是唯一来源；它也打印在 payload 中。
+预期：两个清单均有效，打印名称和版本，Claude validator 报告
+`Validation passed`。`plugin.json` 是插件版本来源；同一值写入 marketplace
+并打印在 payload 中。
 
 ### 2.2. Claude 格式——带上下文的有效 JSON
 
@@ -32,7 +35,21 @@ bash hooks/session-start.sh --format claude \
 
 预期：`OK`。另外检查上下文包含 `prompt.md` 的第一个标题和「插件版本:」。
 
-### 2.3. Plain 格式——人类可读的 payload
+### 2.3. 没有 jq 和 python3 时的 Claude 格式
+
+```bash
+PYTHON_BIN="$(command -v python3)"
+TMP_BIN="$(mktemp -d)"
+for cmd in cat dirname head sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
+PATH="$TMP_BIN" /bin/bash hooks/session-start.sh --format claude \
+  | "$PYTHON_BIN" -c 'import json,sys; json.load(sys.stdin); print("OK")'
+rm -rf "$TMP_BIN"
+```
+
+预期：`OK`。该测试故意从 `PATH` 中移除 `jq` 和 `python3`，验证干净的
+Claude Desktop 安装所使用的内置 Bash 编码器。
+
+### 2.4. Plain 格式——人类可读的 payload
 
 ```bash
 bash hooks/session-start.sh --format plain | head -40
@@ -40,7 +57,7 @@ bash hooks/session-start.sh --format plain | head -40
 
 预期：prompt → posture → lore → user → research 索引标题顺序正确，带 `---` 分隔符。
 
-### 2.4. Hermes：第一轮注入
+### 2.5. Hermes：第一轮注入
 
 ```bash
 SID="demo-$(date +%s)"
@@ -50,7 +67,7 @@ printf '{"session_id":"%s","extra":{"is_first_turn":true}}' "$SID" \
 
 预期：`{"context": "..."`——payload 到达。
 
-### 2.5. Hermes：第二轮沉默
+### 2.6. Hermes：第二轮沉默
 
 ```bash
 SID="demo-$(date +%s)"
@@ -60,7 +77,7 @@ printf '{"session_id":"%s","extra":{"is_first_turn":false}}' "$SID" \
 
 预期：`{}`。
 
-### 2.6. Hermes：无标记时的回退——每个 session_id 一次
+### 2.7. Hermes：无标记时的回退——每个 session_id 一次
 
 ```bash
 SID="demo-fb-$(date +%s)"
@@ -74,7 +91,7 @@ printf '{"session_id":"%s"}' "$SID" \
 
 > 坑：测试后从 state 文件 `${TMPDIR:-/tmp}/agent-plugin-hermes-${USER}.state` 中清理 sid，否则回退会「记住」sid，下次用相同 sid 运行会返回 `{}`。
 
-### 2.7. Hermes：空 stdin 不会弄崩钩子
+### 2.8. Hermes：空 stdin 不会弄崩钩子
 
 ```bash
 printf '' | bash hooks/session-start.sh --format hermes
@@ -85,6 +102,20 @@ printf '' | bash hooks/session-start.sh --format hermes
 ---
 
 ## 3. 安装器检查
+
+### 3.0. 在隔离的 Claude 配置中测试 marketplace 安装
+
+```bash
+VERIFY_CFG="$(mktemp -d)"
+CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin marketplace add "$PWD"
+CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin install choirboy-prompt@choirboy-prompt
+CLAUDE_CONFIG_DIR="$VERIFY_CFG" claude plugin list | grep 'Status: ✔ enabled'
+find "$VERIFY_CFG" -depth -delete
+```
+
+预期：marketplace 添加成功，插件版本复制到临时 cache，状态为 `enabled`，
+没有钩子加载错误。本地 `$PWD` 只用于测试尚未发布的工作副本；README 中的
+用户路径会从 GitHub 添加同一个 marketplace。
 
 ### 3.1. --list
 
@@ -175,10 +206,11 @@ done
 ```bash
 bash -euo pipefail -c '
   bash hooks/session-start.sh --format claude | python3 -c "import json,sys; json.load(sys.stdin)" && echo "1 claude OK"
-  bash hooks/session-start.sh --format plain | grep -q "^# Prompt" && echo "2 plain OK"
-  SID=t-$(date +%s); printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":true}}" | bash hooks/session-start.sh --format hermes | grep -q context && echo "3 hermes first OK"
-  printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":false}}" | bash hooks/session-start.sh --format hermes | grep -q "^{}$" && echo "4 hermes second OK"
-  ./install.sh --list >/dev/null && echo "5 installer list OK"
+  claude plugin validate . >/dev/null && echo "2 manifests OK"
+  bash hooks/session-start.sh --format plain | grep "^# Prompt" >/dev/null && echo "3 plain OK"
+  SID=t-$(date +%s); printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":true}}" | bash hooks/session-start.sh --format hermes | python3 -c "import json,sys; assert \"context\" in json.load(sys.stdin)" && echo "4 hermes first OK"
+  printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":false}}" | bash hooks/session-start.sh --format hermes | grep -q "^{}$" && echo "5 hermes second OK"
+  ./install.sh --list >/dev/null && echo "6 installer list OK"
 '
 ```
 
@@ -186,7 +218,8 @@ bash -euo pipefail -c '
 
 ## 6. 何时运行
 
-- 修改 `hooks/session-start.sh` 后——§2.2–2.7。
+- 修改 `hooks/session-start.sh` 后——§2.2–2.8。
+- 修改 `.claude-plugin/plugin.json` 或 `marketplace.json` 后——§2.1 和 §3.0。
 - 修改 `install.sh` 后——§3.1–3.6。
 - 修改内容文件后——§4（闭合、清理）。
 - 修改 `instruction_block` 后——在已安装文件中按标记 grep（见 [docs/installer.zh-CN.md](installer.zh-CN.md) §3.3）。
