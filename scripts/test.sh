@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-VERSION="$(python3 -c 'import json; print(json.load(open(".claude-plugin/plugin.json"))["version"])')"
+VERSION="$(python3 -c 'import json; print(json.load(open(".claude-plugin/plugin.json", encoding="utf-8"))["version"])')"
 
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/choirboy-test.XXXXXX")"
 trap 'rm -rf "$TEST_ROOT"' EXIT
@@ -17,9 +17,9 @@ python3 - <<'PY'
 import json
 from pathlib import Path
 
-plugin = json.loads(Path(".claude-plugin/plugin.json").read_text())
-market = json.loads(Path(".claude-plugin/marketplace.json").read_text())
-hooks = json.loads(Path("hooks/hooks.json").read_text())
+plugin = json.loads(Path(".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+market = json.loads(Path(".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
+hooks = json.loads(Path("hooks/hooks.json").read_text(encoding="utf-8"))
 entry = market["plugins"][0]
 handler = hooks["hooks"]["SessionStart"][0]["hooks"][0]
 assert plugin["name"] == entry["name"] == "choirboy-prompt"
@@ -42,7 +42,7 @@ python3 - "$TEST_ROOT/plugins.json" "$VERSION" <<'PY'
 import json, sys
 from pathlib import Path
 
-plugins = json.loads(Path(sys.argv[1]).read_text())
+plugins = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 plugin = next(item for item in plugins if item["id"] == "choirboy-prompt@choirboy-prompt")
 assert plugin["version"] == sys.argv[2]
 assert plugin["enabled"] is True
@@ -59,12 +59,12 @@ python3 - "$TEST_ROOT/claude.json" "$VERSION" <<'PY'
 import json, re, sys
 from pathlib import Path
 
-doc = json.loads(Path(sys.argv[1]).read_text())
+doc = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 context = doc["hookSpecificOutput"]["additionalContext"]
 version = re.escape(sys.argv[2])
 assert doc["hookSpecificOutput"]["hookEventName"] == "SessionStart"
 hook_marker = re.search(rf'<choirboy-delivery version="{version}" delivery="session-start" context_sha256="([0-9a-f]{{64}})" nonce="[^"]+" />', context)
-skill_marker = re.search(rf'<choirboy-delivery version="{version}" delivery="skill" context_sha256="([0-9a-f]{{64}})" />', Path("skills/load-context/SKILL.md").read_text())
+skill_marker = re.search(rf'<choirboy-delivery version="{version}" delivery="skill" context_sha256="([0-9a-f]{{64}})" />', Path("skills/load-context/SKILL.md").read_text(encoding="utf-8"))
 assert hook_marker and skill_marker and hook_marker.group(1) == skill_marker.group(1)
 assert "<choirboy-context>" in context and "</choirboy-context>" in context
 assert "# Prompt" in context and "## Research — обоснования решений" in context
@@ -86,7 +86,7 @@ printf '{"session_id":"%s","extra":{"is_first_turn":true}}' "$sid" \
 python3 - "$TEST_ROOT/hermes-first.json" <<'PY'
 import json, sys
 from pathlib import Path
-assert "context" in json.loads(Path(sys.argv[1]).read_text())
+assert "context" in json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 PY
 printf '{"session_id":"%s","extra":{"is_first_turn":false}}' "$sid" \
   | bash hooks/session-start.sh --format hermes > "$TEST_ROOT/hermes-second.json"
@@ -104,7 +104,7 @@ PATH="$python_path" /bin/bash -c \
 python3 - "$TEST_ROOT/hermes-python.json" <<'PY'
 import json, sys
 from pathlib import Path
-assert "context" in json.loads(Path(sys.argv[1]).read_text())
+assert "context" in json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 PY
 pass "Hermes Python parser without jq"
 
@@ -135,7 +135,7 @@ python3 - "$manual_settings" "$ROOT/hooks/session-start.sh" <<'PY'
 import json, sys
 from pathlib import Path
 
-doc = json.loads(Path(sys.argv[1]).read_text())
+doc = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 entries = doc["hooks"]["SessionStart"]
 assert len(entries) == 1
 handler = entries[0]["hooks"][0]
@@ -145,7 +145,7 @@ HOME="$manual_home" ./install.sh --uninstall --target claude --settings "$manual
 python3 - "$manual_settings" <<'PY'
 import json, sys
 from pathlib import Path
-assert json.loads(Path(sys.argv[1]).read_text())["hooks"]["SessionStart"] == []
+assert json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["hooks"]["SessionStart"] == []
 PY
 pass "manual installer idempotency and rollback"
 
@@ -157,9 +157,9 @@ import json, sys, tomllib
 from pathlib import Path
 
 home, hook = Path(sys.argv[1]), sys.argv[2]
-hermes = (home / ".hermes/config.yaml").read_text()
-kimi = tomllib.loads((home / ".kimi-code/config.toml").read_text())
-allowlist = json.loads((home / ".hermes/shell-hooks-allowlist.json").read_text())
+hermes = (home / ".hermes/config.yaml").read_text(encoding="utf-8")
+kimi = tomllib.loads((home / ".kimi-code/config.toml").read_text(encoding="utf-8"))
+allowlist = json.loads((home / ".hermes/shell-hooks-allowlist.json").read_text(encoding="utf-8"))
 command = f'bash "{hook}" --format hermes'
 assert f'command: "bash \\"{hook}\\" --format hermes"' in hermes
 assert kimi["hooks"][0]["command"] == f'bash "{hook}" --format plain'
