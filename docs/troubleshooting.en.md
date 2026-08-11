@@ -18,7 +18,7 @@ Claude acknowledgement is not evidence that `SessionStart` ran.
 ## Four-stage diagnosis
 
 1. **Registration:** the plugin manager shows `choirboy-prompt` enabled and
-   version `1.2.2`.
+   version `1.2.3`.
 2. **Execution:** a marketplace hook creates
    `${CLAUDE_PLUGIN_DATA}/latest-delivery.log` with version, hash, and nonce.
 3. **Delivery:** `/choirboy-prompt:diagnose` finds a `choirboy-delivery` marker
@@ -51,7 +51,7 @@ current builds; the skill is the supported fallback.
 
 ### Windows hook error
 
-Version 1.2.2 uses exec form so `${CLAUDE_PLUGIN_ROOT}` is a single argument, but
+Version 1.2.3 uses exec form so `${CLAUDE_PLUGIN_ROOT}` is a single argument, but
 automatic delivery still needs `bash` on `PATH`. Install Git for Windows or use
 the skill fallback. The skill itself has no Bash, jq, Python, or Node dependency.
 

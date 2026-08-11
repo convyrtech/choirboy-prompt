@@ -18,7 +18,7 @@
 ## Четыре стадии диагностики
 
 1. **Регистрация:** Plugin Manager показывает включённый `choirboy-prompt`
-   версии `1.2.2`.
+   версии `1.2.3`.
 2. **Исполнение:** marketplace-hook создаёт
    `${CLAUDE_PLUGIN_DATA}/latest-delivery.log` с версией, hash и nonce.
 3. **Доставка:** `/choirboy-prompt:diagnose` находит `choirboy-delivery` рядом с
@@ -51,7 +51,7 @@ Claude загрузить Choirboy context.
 
 ### Ошибка hook в Windows
 
-Версия 1.2.2 передаёт `${CLAUDE_PLUGIN_ROOT}` отдельным аргументом через
+Версия 1.2.3 передаёт `${CLAUDE_PLUGIN_ROOT}` отдельным аргументом через
 exec-form, но автоматической доставке всё ещё нужен `bash` в `PATH`. Установи Git
 for Windows или используй skill. Сам skill не зависит от Bash, jq, Python или
 Node.

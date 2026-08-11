@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.3 — 2026-08-11
+
+- Made the manual Hermes allowlist path follow Bash `$HOME` explicitly, including
+  Git Bash on Windows where Python's `expanduser("~")` resolves differently.
+
 ## 1.2.2 — 2026-08-11
 
 - Enforced LF checkouts and normalized user-edited CRLF context before hashing,

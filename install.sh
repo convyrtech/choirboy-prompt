@@ -255,10 +255,11 @@ PY
 # hermes_allowlist COMMAND install|uninstall — (un)approve the exact
 # (event, command) pair in ~/.hermes/shell-hooks-allowlist.json.
 hermes_allowlist() {
-  ALLOW_CMD="$1" MODE="$2" python3 - <<'PY'
+  local allowlist_path="$HOME/.hermes/shell-hooks-allowlist.json"
+  ALLOWLIST_PATH="$allowlist_path" ALLOW_CMD="$1" MODE="$2" python3 - <<'PY'
 import json, os
 
-path = os.path.expanduser("~/.hermes/shell-hooks-allowlist.json")
+path = os.environ["ALLOWLIST_PATH"]
 cmd, mode = os.environ["ALLOW_CMD"], os.environ["MODE"]
 
 try:
