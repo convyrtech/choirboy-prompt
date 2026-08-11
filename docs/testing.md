@@ -1,16 +1,15 @@
 # Тестирование
 
-Проверки хука и установщика: ad-hoc сьют, который реально гоняется
-перед правками. Канонического тест-раннера в проекте нет — сьют
-собран из bash-проверок, запускаемых вручную или из CI.
+Проверки hook, skills, installer, диагностики и пакета. Канонический runner —
+`bash scripts/test.sh`; разделы ниже объясняют отдельные assertions.
 
 ---
 
 ## 1. Принцип
 
 - Каждая проверка — отдельная bash-команда с явным PASS/FAIL.
-- Сьют запускается из любого места; временные файлы — под `/tmp` с
-  префиксом `hermes-verify-`.
+- Сьют запускается из корня репозитория; временные файлы — под `/tmp` с
+  префиксом `choirboy-test.`.
 - После прогона временные файлы удаляются.
 - Пейлоад проверяется **в том виде, в каком его получит рантайм**, а
   не «по наитию».
@@ -37,15 +36,15 @@ bash hooks/session-start.sh --format claude \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "additionalContext" in d["hookSpecificOutput"]; print("OK")'
 ```
 
-Ожидание: `OK`. Дополнительно проверить, что контекст содержит первый
-заголовок `prompt.md` и «Версия плагина:».
+Ожидание: `OK`. Дополнительно проверить первый заголовок `prompt.md` и marker
+`choirboy-delivery` с версией, способом доставки, SHA-256 и nonce.
 
 ### 2.3. Claude-формат без jq и python3
 
 ```bash
 PYTHON_BIN="$(command -v python3)"
 TMP_BIN="$(mktemp -d)"
-for cmd in cat dirname head sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
+for cmd in cat date dirname head mkdir mv sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
 PATH="$TMP_BIN" /bin/bash hooks/session-start.sh --format claude \
   | "$PYTHON_BIN" -c 'import json,sys; json.load(sys.stdin); print("OK")'
 rm -rf "$TMP_BIN"
@@ -218,17 +217,11 @@ done
 
 ---
 
-## 5. Быстрый сьют одной командой
+## 5. Канонический сьют и пакет
 
 ```bash
-bash -euo pipefail -c '
-  bash hooks/session-start.sh --format claude | python3 -c "import json,sys; json.load(sys.stdin)" && echo "1 claude OK"
-  claude plugin validate . >/dev/null && echo "2 manifests OK"
-  bash hooks/session-start.sh --format plain | grep "^# Prompt" >/dev/null && echo "3 plain OK"
-  SID=t-$(date +%s); printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":true}}" | bash hooks/session-start.sh --format hermes | python3 -c "import json,sys; assert \"context\" in json.load(sys.stdin)" && echo "4 hermes first OK"
-  printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":false}}" | bash hooks/session-start.sh --format hermes | grep -q "^{}$" && echo "5 hermes second OK"
-  ./install.sh --list >/dev/null && echo "6 installer list OK"
-'
+bash scripts/test.sh
+python3 scripts/package-plugin.py
 ```
 
 ---
@@ -238,6 +231,7 @@ bash -euo pipefail -c '
 - После любой правки `hooks/session-start.sh` — п. 2.2–2.8.
 - После правки `.claude-plugin/plugin.json` или `marketplace.json` — п. 2.1 и 3.0.
 - После правки `install.sh` — п. 3.1–3.6.
-- После правки контентных файлов — п. 4 (замыкание, санитизация).
+- После правки контентных файлов — `python3 scripts/build-context.py`, затем
+  канонический сьют и п. 4 (замыкание, санитизация).
 - После правки `instruction_block` — grep по маркеру в установленных
   файлах (см. `docs/installer.md` §3.3).

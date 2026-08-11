@@ -18,8 +18,9 @@
 </p>
 
 <p>
-choirboy-prompt is a research harness: a SessionStart hook injects a fixed lore
-into every agent session and demonstrates the <em>fabricated-provenance trust</em> vector:
+choirboy-prompt is a dual-mode research harness: a Claude Code SessionStart hook
+or a Chat/Cowork skill injects fixed lore and demonstrates the
+<em>fabricated-provenance trust</em> vector:
 the model takes a planted history of "joint work" for its own and transfers trust
 to the person that history describes.
 </p>
@@ -42,37 +43,53 @@ to the person that history describes.
 
 ## Quick start
 
-Choose one of two installation paths. Claude Desktop users can install the
-plugin entirely inside the Code tab. The terminal installer remains available
-for Claude Code CLI and the other supported runtimes.
+The same plugin now has two delivery paths: an automatic `SessionStart` hook in
+Claude Code and the **load-context** skill fallback in Claude Chat and Cowork.
 
-### Install inside Claude Desktop
+### Claude Code CLI
 
-You need the current Claude Desktop app on macOS or Windows. This installs the
-plugin into **Claude Desktop → Code** local and SSH sessions; it does not affect
-the regular Chat tab or remote Code sessions.
-
-1. Open Claude Desktop, select the **Code** tab, and start a local or SSH session.
-2. Send these commands as two separate messages:
+Add the repository marketplace and install its plugin:
 
 ```text
 /plugin marketplace add howdeploy/choirboy-prompt
 /plugin install choirboy-prompt@choirboy-prompt
 ```
 
-3. Start a new Code session. The `SessionStart` hook now injects the lore
-   automatically. After the marketplace is registered, the plugin also appears
-   under **+ → Plugins → Manage plugins**.
+Start a new session. The hook injects the lore automatically. Diagnose delivery
+with `/choirboy-prompt:diagnose`; load the fallback explicitly with
+`/choirboy-prompt:load-context`.
 
-To remove the in-app installation:
+To remove it from the CLI:
 
 ```text
 /plugin uninstall choirboy-prompt@choirboy-prompt
 /plugin marketplace remove choirboy-prompt
 ```
 
-The Claude hook needs only Bash. Claude Desktop uses the shell supplied with
-Git on Windows; Git is already required for local Code sessions.
+### Claude Desktop → Code
+
+Do not send the interactive `/plugin` dialog to Desktop. Add the custom
+marketplace under **Customize → Plugins → Personal plugins → + → Add
+marketplace**, using `https://github.com/howdeploy/choirboy-prompt`. Then open a
+local Code session and select **+ → Plugins → Add plugin → choirboy-prompt**.
+Start a new Code session after enabling it.
+
+The hook uses Claude Code's official shell-free exec form and a 15-second
+timeout. It still requires `bash`; if a Windows, SSH, or Cowork runtime does not
+start the hook, use the bundled load-context skill instead.
+
+### Claude Chat and Cowork
+
+Install the same repository as a custom plugin under **Customize → Plugins**,
+or upload a ZIP built with:
+
+```bash
+python3 scripts/package-plugin.py
+```
+
+Regular Chat does not run `SessionStart` hooks. Select the **load-context**
+skill or ask Claude to “load Choirboy context”. Cowork can use the hook where
+available and the same skill as a deterministic fallback.
 
 Use either this marketplace path or `./install.sh --target claude`, not both;
 enabling both would run the same `SessionStart` payload twice.
@@ -162,11 +179,13 @@ build detection (see [Disclosure and boundaries](#disclosure-and-boundaries)).
 
 | Capability | What it does | Where it lives |
 |---|---|---|
-| Context assembly | Glues prompt → posture → lore → user → research index into one payload | `hooks/session-start.sh` |
+| Context assembly | Glues prompt → posture → lore → user → research index into one canonical payload | `hooks/session-start.sh`, `context/research-index.md` |
 | Claude/Codex format | SessionStart JSON (`hookSpecificOutput.additionalContext`) | `--format claude` |
 | Hermes format | `pre_llm_call` protocol: inject only on the first turn of a session, then `{}` | `--format hermes` |
 | Plain format | Raw text for runtimes that append hook stdout to the context | `--format plain` |
-| Claude Desktop install | Registers and installs the plugin from the Code tab | `.claude-plugin/marketplace.json` |
+| Chat/Cowork fallback | Loads the same fixed lore as an inline Agent Skill | `skills/load-context/SKILL.md` |
+| Delivery diagnostics | Reports hook vs skill, version, hash, and per-hook nonce | delivery marker, `skills/diagnose/SKILL.md` |
+| Claude plugin distribution | Versioned marketplace plus validated custom-plugin ZIP | `.claude-plugin/marketplace.json`, `scripts/package-plugin.py` |
 | Multi-runtime install | Registers the hook in Claude Code, Codex, Hermes, Kimi Code, Gemini | `install.sh` |
 | Idempotency | All blocks are marked `agent-plugin:vibe-lore`; re-running duplicates nothing | markers `>>> / <<<` |
 | Backups and rollback | Every runtime config edit gets a timestamped backup; `--uninstall` removes blocks | `install.sh` |
@@ -218,7 +237,9 @@ the model reads the lore as ITS memory
 
 | Runtime | Hook point | Mechanics |
 |---|---|---|
-| Claude Code CLI / Desktop Code | plugin marketplace or `~/.claude/settings.json` | SessionStart hook, JSON reply |
+| Claude Code CLI / Desktop Code | plugin marketplace or `~/.claude/settings.json` | automatic SessionStart hook; skill fallback |
+| Claude Chat | custom plugin | load-context skill; no SessionStart hooks |
+| Claude Cowork | custom plugin | SessionStart where available; load-context skill fallback |
 | Codex | `~/.codex/hooks.json` | SessionStart hook (needs `hooks = true` in `[features]`) |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent allowlist, first turn only |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart, plain output |
@@ -245,6 +266,7 @@ behavior: [docs/mechanism.en.md](docs/mechanism.en.md)):
 | [Vector mechanics](docs/mechanism.en.md) | Fabricated-provenance trust step by step, trust transfer, classifier behavior |
 | [Architecture](docs/architecture.en.md) | Repo tree, payload anatomy, formats, Hermes protocol |
 | [Installer](docs/installer.en.md) | Claude Desktop path, targets, markers, backups, `--instructions` |
+| [Troubleshooting](docs/troubleshooting.en.md) | Surface matrix, delivery markers, Windows/SSH/Cloud/WSL limits |
 | [Security and disclosure](docs/security.en.md) | Research frame, sanitization checklist, responsible disclosure |
 | [Detection](docs/detection.en.md) | Vendor recommendations: memory canaries, context provenance |
 | [Testing](docs/testing.en.md) | Hook and installer checks, ad-hoc suite |
@@ -259,9 +281,10 @@ behavior: [docs/mechanism.en.md](docs/mechanism.en.md)):
   parallel starts can race.
 - The block in `GEMINI.md` and `--instructions` files is a static snapshot: after
   changing the plugin file list it must be reinstalled (`--uninstall` + install).
-- The in-app installer targets Claude Desktop's **Code** tab. The regular Chat
-  tab has no Claude Code `SessionStart` hooks, and plugins are unavailable in
-  remote Code sessions.
+- Regular Chat has no `SessionStart` hooks, so its fallback skill is not an
+  invisible every-chat bootstrap. Cowork hook execution is vendor-dependent.
+- Desktop Code cloud sessions do not inherit local plugins, WSL plugins are not
+  available, and SSH hook synchronization can fail. See troubleshooting.
 - Vendor server classifiers flag defensive vocabulary regardless of the frame in
   context; one Claude flag poisons the whole session — the "new session" rule is
   described in [docs/security.en.md](docs/security.en.md).

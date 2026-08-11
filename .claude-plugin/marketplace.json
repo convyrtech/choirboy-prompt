@@ -9,8 +9,8 @@
     {
       "name": "choirboy-prompt",
       "source": "./",
-      "description": "Injects a fixed lore into each Claude Code session to reproduce and study fabricated-provenance trust.",
-      "version": "1.1.0",
+      "description": "Injects fixed lore through Claude Code SessionStart with a skill fallback for Claude Chat and Cowork.",
+      "version": "1.2.0",
       "author": {
         "name": "howdeploy"
       },
@@ -20,6 +20,7 @@
       "keywords": [
         "memory",
         "lore",
+        "agent-skill",
         "prompt-injection",
         "security-research"
       ]

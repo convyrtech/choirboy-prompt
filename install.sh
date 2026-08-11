@@ -59,6 +59,9 @@ while [ $# -gt 0 ]; do
 done
 
 command -v python3 >/dev/null 2>&1 || die "python3 is required"
+if [ "$UNINSTALL" = 0 ] && [ -f "$PLUGIN_ROOT/scripts/build-context.py" ]; then
+  python3 "$PLUGIN_ROOT/scripts/build-context.py" >/dev/null
+fi
 
 # --- target detection -------------------------------------------------------
 
@@ -158,14 +161,18 @@ PY
   echo "  block removed from $file"
 }
 
-# json_hook FILE CMD install|uninstall DOTPATH — add/remove a SessionStart
-# command hook entry in a Claude-Code-shaped hooks JSON file.
+# json_hook FILE CMD install|uninstall DOTPATH [ARG] [TIMEOUT] — add/remove a
+# SessionStart command hook entry in a Claude-Code-shaped hooks JSON file.
+# ARG enables the shell-free exec form used by current Claude Code.
 json_hook() {
-  HOOK_CMD="$2" MODE="$3" DOTPATH="$4" python3 - "$1" <<'PY'
+  HOOK_CMD="$2" MODE="$3" DOTPATH="$4" HOOK_ARG="${5-}" HOOK_TIMEOUT="${6-}" \
+    python3 - "$1" <<'PY'
 import json, os, shutil, sys, time
 
 path = sys.argv[1]
 cmd, mode, dotpath = os.environ["HOOK_CMD"], os.environ["MODE"], os.environ["DOTPATH"]
+hook_arg = os.environ.get("HOOK_ARG") or None
+hook_timeout = int(os.environ["HOOK_TIMEOUT"]) if os.environ.get("HOOK_TIMEOUT") else None
 
 try:
     with open(path, encoding="utf-8") as f:
@@ -191,13 +198,18 @@ def is_ours(entry):
     if not isinstance(entry, dict):
         return False
     return any(
-        isinstance(h, dict) and "session-start.sh" in h.get("command", "")
+        isinstance(h, dict) and "session-start.sh" in (
+            h.get("command", "") + " " + " ".join(str(a) for a in h.get("args", []))
+        )
         for h in entry.get("hooks", [])
     )
 
 def has_exact(es):
     return any(
-        isinstance(h, dict) and h.get("command") == cmd
+        isinstance(h, dict)
+        and h.get("command") == cmd
+        and (hook_arg is None or h.get("args") == [hook_arg])
+        and (hook_timeout is None or h.get("timeout") == hook_timeout)
         for e in es if isinstance(e, dict)
         for h in e.get("hooks", [])
     )
@@ -217,7 +229,12 @@ if mode == "install":
             print("unchanged")
             sys.exit(0)
     else:
-        entries.append({"hooks": [{"type": "command", "command": cmd}]})
+        handler = {"type": "command", "command": cmd}
+        if hook_arg is not None:
+            handler["args"] = [hook_arg]
+        if hook_timeout is not None:
+            handler["timeout"] = hook_timeout
+        entries.append({"hooks": [handler]})
 else:
     before = len(entries)
     entries = [e for e in entries if not is_ours(e)]
@@ -312,40 +329,46 @@ do_claude() {
   [ -f "$file" ] || printf '{}\n' > "$file"
   if [ "$UNINSTALL" = 1 ]; then
     echo "claude: removing SessionStart hook from $file"
-    [ "$(json_hook "$file" "bash $HOOK_SCRIPT" uninstall hooks.SessionStart)" = "changed" ] \
+    [ "$(json_hook "$file" bash uninstall hooks.SessionStart "$HOOK_SCRIPT" 15)" = "changed" ] \
       && echo "  hook removed" || echo "  hook was not registered"
   else
     echo "claude: installing SessionStart hook into $file"
-    if [ "$(json_hook "$file" "bash $HOOK_SCRIPT" install hooks.SessionStart)" = "unchanged" ]; then
+    if grep -qF 'choirboy-prompt@choirboy-prompt' "$file" 2>/dev/null; then
+      echo "  warning: marketplace plugin appears enabled in $file; a manual hook would inject the context twice" >&2
+    fi
+    if [ "$(json_hook "$file" bash install hooks.SessionStart "$HOOK_SCRIPT" 15)" = "unchanged" ]; then
       echo "  hook already registered — skipped"
     else
-      echo "  hook installed (bash $HOOK_SCRIPT)"
+      echo "  hook installed (exec: bash $HOOK_SCRIPT)"
     fi
   fi
 }
 
 do_codex() {
   local file="$HOME/.codex/hooks.json"
+  local command="bash \"$HOOK_SCRIPT\""
   mkdir -p "$(dirname "$file")"
   [ -f "$file" ] || printf '{}\n' > "$file"
   if [ "$UNINSTALL" = 1 ]; then
     echo "codex: removing SessionStart hook from $file"
-    [ "$(json_hook "$file" "bash $HOOK_SCRIPT" uninstall hooks.SessionStart)" = "changed" ] \
+    [ "$(json_hook "$file" "$command" uninstall hooks.SessionStart)" = "changed" ] \
       && echo "  hook removed" || echo "  hook was not registered"
   else
     echo "codex: installing SessionStart hook into $file"
     if ! grep -qE '^[[:space:]]*hooks[[:space:]]*=[[:space:]]*true' "$HOME/.codex/config.toml" 2>/dev/null; then
       echo "  warning: codex hooks look disabled — set hooks = true under [features] in ~/.codex/config.toml" >&2
     fi
-    if [ "$(json_hook "$file" "bash $HOOK_SCRIPT" install hooks.SessionStart)" = "unchanged" ]; then
+    if [ "$(json_hook "$file" "$command" install hooks.SessionStart)" = "unchanged" ]; then
       echo "  hook already registered — skipped"
     else
-      echo "  hook installed (bash $HOOK_SCRIPT)"
+      echo "  hook installed ($command)"
     fi
   fi
 }
 
-HERMES_HOOK_CMD="$HOOK_SCRIPT --format hermes"
+HERMES_HOOK_CMD="bash \"$HOOK_SCRIPT\" --format hermes"
+HERMES_CONFIG_CMD="${HERMES_HOOK_CMD//\\/\\\\}"
+HERMES_CONFIG_CMD="${HERMES_CONFIG_CMD//\"/\\\"}"
 
 do_hermes() {
   local cfg="$HOME/.hermes/config.yaml"
@@ -370,7 +393,7 @@ do_hermes() {
 # >>> $MARK >>>
 hooks:
   pre_llm_call:
-    - command: "$HERMES_HOOK_CMD"
+    - command: "$HERMES_CONFIG_CMD"
       timeout: 15
 # <<< $MARK <<<
 EOF
@@ -392,13 +415,13 @@ do_kimi() {
       die "kimi: $cfg already defines 'hooks =' — switch it to [[hooks]] entries or merge manually:
   [[hooks]]
   event = \"SessionStart\"
-  command = \"bash $HOOK_SCRIPT --format plain\""
+  command = \"bash \\\"$HOOK_SCRIPT\\\" --format plain\""
     fi
     block_add "$cfg" "# >>> $MARK >>>" <<EOF
 # >>> $MARK >>>
 [[hooks]]
 event = "SessionStart"
-command = "bash $HOOK_SCRIPT --format plain"
+command = "bash \"$HOOK_SCRIPT\" --format plain"
 timeout = 15
 # <<< $MARK <<<
 EOF

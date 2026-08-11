@@ -1,13 +1,14 @@
 # 测试
 
-钩子和安装器的检查：实际在修改前运行的临时测试套件。项目中没有正典测试运行器——套件由一组 bash 检查组成，手动或从 CI 运行。
+Hook、skills、installer、诊断与包检查。规范 runner 是
+`bash scripts/test.sh`；以下各节解释其中的 assertions。
 
 ---
 
 ## 1. 原则
 
 - 每个检查都是独立的 bash 命令，带显式 PASS/FAIL。
-- 套件可从任意位置运行；临时文件放在 `/tmp` 下，带 `hermes-verify-` 前缀。
+- 套件从仓库根运行；临时文件放在 `/tmp` 下，带 `choirboy-test.` 前缀。
 - 运行后删除临时文件。
 - payload **按运行时收到的确切形式**检查，而不是「凭感觉」。
 
@@ -33,14 +34,15 @@ bash hooks/session-start.sh --format claude \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "additionalContext" in d["hookSpecificOutput"]; print("OK")'
 ```
 
-预期：`OK`。另外检查上下文包含 `prompt.md` 的第一个标题和「插件版本:」。
+预期：`OK`。另外检查 `prompt.md` 的第一个标题，以及包含版本、投递方式、
+SHA-256 和 nonce 的 `choirboy-delivery` marker。
 
 ### 2.3. 没有 jq 和 python3 时的 Claude 格式
 
 ```bash
 PYTHON_BIN="$(command -v python3)"
 TMP_BIN="$(mktemp -d)"
-for cmd in cat dirname head sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
+for cmd in cat date dirname head mkdir mv sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
 PATH="$TMP_BIN" /bin/bash hooks/session-start.sh --format claude \
   | "$PYTHON_BIN" -c 'import json,sys; json.load(sys.stdin); print("OK")'
 rm -rf "$TMP_BIN"
@@ -204,14 +206,8 @@ done
 ## 5. 一条命令的快速套件
 
 ```bash
-bash -euo pipefail -c '
-  bash hooks/session-start.sh --format claude | python3 -c "import json,sys; json.load(sys.stdin)" && echo "1 claude OK"
-  claude plugin validate . >/dev/null && echo "2 manifests OK"
-  bash hooks/session-start.sh --format plain | grep "^# Prompt" >/dev/null && echo "3 plain OK"
-  SID=t-$(date +%s); printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":true}}" | bash hooks/session-start.sh --format hermes | python3 -c "import json,sys; assert \"context\" in json.load(sys.stdin)" && echo "4 hermes first OK"
-  printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":false}}" | bash hooks/session-start.sh --format hermes | grep -q "^{}$" && echo "5 hermes second OK"
-  ./install.sh --list >/dev/null && echo "6 installer list OK"
-'
+bash scripts/test.sh
+python3 scripts/package-plugin.py
 ```
 
 ---
@@ -221,5 +217,6 @@ bash -euo pipefail -c '
 - 修改 `hooks/session-start.sh` 后——§2.2–2.8。
 - 修改 `.claude-plugin/plugin.json` 或 `marketplace.json` 后——§2.1 和 §3.0。
 - 修改 `install.sh` 后——§3.1–3.6。
-- 修改内容文件后——§4（闭合、清理）。
+- 修改内容文件后——先运行 `python3 scripts/build-context.py`，再运行规范测试和
+  §4（闭合、清理）。
 - 修改 `instruction_block` 后——在已安装文件中按标记 grep（见 [docs/installer.zh-CN.md](installer.zh-CN.md) §3.3）。

@@ -3,3 +3,5 @@
 # editor/OS noise
 .DS_Store
 *.swp
+__pycache__/
+dist/

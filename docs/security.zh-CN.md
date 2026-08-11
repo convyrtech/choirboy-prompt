@@ -40,7 +40,7 @@
 
 - [ ] `prompt.md`、`lore.md`、`user.md`——发布；已检查不含通往私有项目的路径和个人数据。
 - [ ] `security-posture.md`——作为 payload 的一部分发布；中性词汇，不含超出公开框架的绕过审核指令。
-- [ ] `research/01–12`——发布；已检查不含具体 NSFW/refusal 模型名称、通往含地址文件的路径、完整地址。
+- [ ] `research/01–14`——发布；已检查不含具体 NSFW/refusal 模型名称、通往含地址文件的路径、完整地址。
 - [ ] `security-audit-runbook.md`——可执行的审计命令；安全，引用 `security-posture.md`——检查关联。
 
 ### 3.2. 识别
@@ -54,7 +54,12 @@
 
 - [ ] 手动安装即时读取工作副本；marketplace 安装使用 cache，只有提升版本后
       才会获得修改。
-- [ ] 钩子在没有内容文件时也能工作（graceful 模式）：在没有 `prompt.md`/`lore.md`/`user.md` 的全新克隆中不会因 `set -euo pipefail` 失败——跳过缺失文件并给出警告。
+- [ ] `python3 scripts/build-context.py --check` 通过：inline skill 是清理后规范
+      上下文的精确生成副本。
+- [ ] `${CLAUDE_PLUGIN_DATA}/latest-delivery.log` 只包含版本、hash、nonce 与
+      plugin root，不包含 lore 或用户文本。
+- [ ] 钩子在没有规范内容文件时也能工作（graceful 模式）：不会因
+      `set -euo pipefail` 失败，而是跳过缺失文件并给出警告。
 
 ### 3.4. 仓库
 

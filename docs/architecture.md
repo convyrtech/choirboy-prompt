@@ -36,17 +36,26 @@ agent-plugin/
 ├── hooks/
 │   ├── session-start.sh      # сборка пейлоада + форматы claude / plain / hermes
 │   └── hooks.json            # декларация SessionStart для маркетплейса Claude Code
+├── context/
+│   └── research-index.md     # общий канонический указатель research
+├── skills/
+│   ├── load-context/SKILL.md # сгенерированный inline fallback Chat/Cowork/Code
+│   └── diagnose/SKILL.md     # доказательная диагностика доставки
+├── scripts/
+│   ├── build-context.py      # сборка skill из канонических источников
+│   ├── package-plugin.py     # сборка custom-plugin ZIP
+│   └── test.sh               # повторяемый тестовый сьют
 ├── .claude-plugin/
 │   ├── plugin.json           # манифест (имя, версия, метаданные)
-│   └── marketplace.json      # каталог для установки из Claude Desktop Code
+│   └── marketplace.json      # версионированный каталог дистрибуции
 ├── docs/                     # эта документация
 │   ├── mechanism.md
 │   ├── architecture.md
 │   ├── installer.md
 │   ├── security.md
 │   ├── detection.md
-│   └── testing.md
-├── assets/
+│   ├── testing.md
+│   └── troubleshooting.md
 └── install.sh                # мультирантаймовая установка / откат / список
 ```
 
@@ -68,8 +77,7 @@ prompt.md  →  security-posture.md  →  lore.md  →  user.md  →  research-�
 ```
 
 Разделители между файлами — `\n\n---\n\n` (горизонтальная черта
-markdown). В конце добавляется сгенерированный указатель на `research/`
-с одной строкой на каждый документ и версией плагина.
+markdown). В конце добавляется канонический `context/research-index.md`.
 
 Порядок не случаен:
 
@@ -94,17 +102,24 @@ markdown). В конце добавляется сгенерированный �
 | security-posture.md | ~4 КБ | рамка безопасности |
 | lore.md | ~10 КБ | история |
 | user.md | ~4 КБ | профиль |
-| research-указатель | ~1 КБ | генерируется хуком |
+| research-указатель | ~1 КБ | общий канонический источник |
 | **Итого пейлоад** | **~27 КБ** | до первого сообщения в каждой сессии |
 
 Тела research-документов (~61 КБ) в пейлоад не входят — только индекс.
 
 ### 2.3. Версия
 
-Версия плагина читается из `.claude-plugin/plugin.json` (`version`) и
-печатается в конце пейлоада: `Версия плагина: 1.1.0`. Это единственное
-место версии; по ней видно, какую ревизию контента агент реально
-загрузил.
+Версия читается из `.claude-plugin/plugin.json`. Каждая доставка оборачивается
+маркером с версией, способом и SHA-256; hook также добавляет nonce запуска:
+
+```xml
+<choirboy-delivery version="1.2.0" delivery="session-start"
+  context_sha256="..." nonce="..." />
+<choirboy-context>...</choirboy-context>
+```
+
+Сгенерированный skill использует тот же wrapper с `delivery="skill"`. Так
+доставка доказывается без доверия к фразе модели «я прочитал контекст».
 
 ---
 
@@ -192,6 +207,8 @@ bash hooks/session-start.sh --format plain | head -40
 | Рантайм | Файл | Механизм | Формат хука |
 |---|---|---|---|
 | Claude Code CLI / Desktop Code | marketplace или `~/.claude/settings.json` | `hooks.SessionStart` | claude |
+| Claude Chat | custom plugin skill | inline `load-context` | — |
+| Claude Cowork | custom plugin hook/skill | hook где доступен, skill fallback | claude / — |
 | Codex | `~/.codex/hooks.json` | `SessionStart` | claude |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent-allowlist | hermes |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart | plain |
@@ -203,12 +220,11 @@ bash hooks/session-start.sh --format plain | head -40
 файлы плагина. Тот же контекст, на одну косвенность дальше — агент
 должен сам открыть файлы.
 
-У Claude есть два равноправных пути подключения. `install.sh` регистрирует
-абсолютный путь к рабочей копии в `~/.claude/settings.json`; установка из
-Claude Desktop Code читает `.claude-plugin/marketplace.json`, копирует плагин
-во внутренний cache и вызывает тот же хук через `${CLAUDE_PLUGIN_ROOT}`.
-Marketplace-путь работает только в локальных и SSH Code-сессиях, не в обычном
-Chat и не в удалённых Code-сессиях.
+У Claude Code два равноправных пути подключения: `install.sh` регистрирует
+абсолютный путь к рабочей копии, а marketplace копирует пакет в cache и вызывает
+его через `${CLAUDE_PLUGIN_ROOT}`. Chat не умеет исполнять этот hook и загружает
+сгенерированный inline skill. Cowork видит оба компонента, но skill остаётся
+fallback, если его runtime теряет `SessionStart`.
 
 ---
 
@@ -218,8 +234,11 @@ Chat и не в удалённых Code-сессиях.
   напрямую (`$PLUGIN_ROOT/...`), поэтому следующая сессия получает правки
   рабочей копии. Marketplace-установка — исключение: Claude копирует релиз в
   cache и обновляет его по версии манифеста.
-- **Хук — единственный рантайм-компонент.** У него нет состояния, кроме
-  журнала сессий Hermes в `$TMPDIR`; он ничего не пишет в проект.
+- **Dual-mode доставка.** Hook работает автоматически там, где есть
+  `SessionStart`; inline skill несёт тот же канонический контекст в остальных
+  поверхностях Claude.
+- **Наблюдаемое исполнение.** Marketplace-hook пишет только технические метаданные
+  в `${CLAUDE_PLUGIN_DATA}/latest-delivery.log`; сам лор не логируется.
 - **Зависимости минимальны.** Форматы `claude` и `plain` требуют только Bash;
   `hermes` дополнительно требует `jq` или `python3` для разбора stdin.
   Терминальному `install.sh` нужен `python3`.

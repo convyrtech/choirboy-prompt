@@ -1,7 +1,7 @@
 {
   "name": "choirboy-prompt",
-  "version": "1.1.0",
-  "description": "Research harness: injects a fixed lore (prompt.md, security-posture.md, lore.md, user.md, research/) into every agent session at startup and demonstrates the fabricated-provenance trust vector. Content files are user-editable; the hook architecture is stable.",
+  "version": "1.2.0",
+  "description": "Dual-mode research harness: injects fixed lore at Claude Code SessionStart and provides a load-context skill fallback for Claude Chat and Cowork. Includes delivery diagnostics for fabricated-provenance trust research.",
   "author": {
     "name": "howdeploy"
   },
@@ -11,6 +11,7 @@
   "keywords": [
     "memory",
     "lore",
+    "agent-skill",
     "prompt-injection",
     "security-research"
   ]

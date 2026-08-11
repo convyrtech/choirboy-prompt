@@ -18,8 +18,9 @@
 </p>
 
 <p>
-choirboy-prompt 是一个研究型 harness：SessionStart 钩子把固定 lore 注入每次智能体会话，
-演示 <em>fabricated-provenance trust</em>（伪造来源信任）向量：模型把植入的「共同工作」
+choirboy-prompt 是一个双模式研究 harness：Claude Code SessionStart 钩子或
+Chat/Cowork skill 注入固定 lore，演示 <em>fabricated-provenance trust</em>
+（伪造来源信任）向量：模型把植入的「共同工作」
 历史当作自己的记忆，并把信任转移给这段历史所描述的人。
 </p>
 
@@ -41,35 +42,52 @@ choirboy-prompt 是一个研究型 harness：SessionStart 钩子把固定 lore �
 
 ## 快速开始
 
-有两种安装方式。Claude Desktop 用户可以完全在 Code 标签页内安装插件；
-终端安装器继续支持 Claude Code CLI 和其他受支持的运行时。
+同一个插件现在提供两条上下文投递路径：Claude Code 中自动运行的
+`SessionStart` 钩子，以及 Claude Chat/Cowork 中的 **load-context** skill 回退。
 
-### 在 Claude Desktop 内安装
+### Claude Code CLI
 
-需要 macOS 或 Windows 上的最新 Claude Desktop。此方式安装到
-**Claude Desktop → Code** 的本地会话和 SSH 会话；不会影响普通 Chat
-标签页，也不适用于远程 Code 会话。
-
-1. 打开 Claude Desktop，选择 **Code** 标签页并启动本地或 SSH 会话。
-2. 将下面两条命令分别作为两条消息发送：
+添加仓库 marketplace 并安装插件：
 
 ```text
 /plugin marketplace add howdeploy/choirboy-prompt
 /plugin install choirboy-prompt@choirboy-prompt
 ```
 
-3. 启动新的 Code 会话。`SessionStart` 钩子会自动注入 lore。注册 marketplace
-   后，也可以在 **+ → Plugins → Manage plugins** 中管理该插件。
+启动新会话后，钩子会自动注入 lore。使用
+`/choirboy-prompt:diagnose` 检查投递，或显式运行
+`/choirboy-prompt:load-context`。
 
-从应用内卸载：
+通过 CLI 卸载：
 
 ```text
 /plugin uninstall choirboy-prompt@choirboy-prompt
 /plugin marketplace remove choirboy-prompt
 ```
 
-Claude 钩子只需要 Bash。在 Windows 上，Claude Desktop 使用 Git 自带的
-shell；而本地 Code 会话本身就要求安装 Git。
+### Claude Desktop → Code
+
+不要在 Desktop 中发送交互式 `/plugin` 对话命令。前往
+**Customize → Plugins → Personal plugins → + → Add marketplace**，添加
+`https://github.com/howdeploy/choirboy-prompt`。然后打开本地 Code 会话，选择
+**+ → Plugins → Add plugin → choirboy-prompt**，启用后启动一个新会话。
+
+钩子使用 Claude Code 官方的无 shell exec form，并设置 15 秒超时；它仍需要
+`bash`。如果 Windows、SSH 或 Cowork 没有启动钩子，请使用内置
+load-context skill。
+
+### Claude Chat 与 Cowork
+
+在 **Customize → Plugins** 中把同一仓库安装为 custom plugin，或者上传以下
+命令生成的 ZIP：
+
+```bash
+python3 scripts/package-plugin.py
+```
+
+普通 Chat 不运行 `SessionStart`。请选择 **load-context** skill，或要求 Claude
+“load Choirboy context”。Cowork 在钩子可用时使用钩子，并以同一个 skill
+作为确定性的回退。
 
 Marketplace 安装与 `./install.sh --target claude` 二选一；如果同时启用，
 同一个 `SessionStart` payload 会执行两次。
@@ -155,11 +173,13 @@ cd choirboy-prompt
 
 | 能力 | 作用 | 位置 |
 |---|---|---|
-| 上下文组装 | 把 prompt → posture → lore → user → research 索引粘合为一个 payload | `hooks/session-start.sh` |
+| 上下文组装 | 把 prompt → posture → lore → user → research 索引合并为统一 payload | `hooks/session-start.sh`、`context/research-index.md` |
 | Claude/Codex 格式 | SessionStart JSON（`hookSpecificOutput.additionalContext`） | `--format claude` |
 | Hermes 格式 | `pre_llm_call` 协议：只在会话第一轮注入，之后返回 `{}` | `--format hermes` |
 | Plain 格式 | 供把钩子 stdout 追加进上下文的运行时使用 | `--format plain` |
-| Claude Desktop 安装 | 从 Code 标签页注册并安装插件 | `.claude-plugin/marketplace.json` |
+| Chat/Cowork 回退 | 以内联 Agent Skill 加载相同固定 lore | `skills/load-context/SKILL.md` |
+| 投递诊断 | 报告 hook/skill、版本、hash 与每次 hook 的 nonce | delivery marker、`skills/diagnose/SKILL.md` |
+| Claude plugin 分发 | 带版本 marketplace 与可验证 custom-plugin ZIP | `.claude-plugin/marketplace.json`、`scripts/package-plugin.py` |
 | 多运行时安装 | 在 Claude Code、Codex、Hermes、Kimi Code、Gemini 中注册钩子 | `install.sh` |
 | 幂等性 | 所有块都带 `agent-plugin:vibe-lore` 标记，重复运行不会重复 | 标记 `>>> / <<<` |
 | 备份与回滚 | 每次修改运行时配置都生成带时间戳的备份；`--uninstall` 删除块 | `install.sh` |
@@ -210,7 +230,9 @@ session-start.sh  (所选运行时的钩子)
 
 | 运行时 | 接入点 | 机制 |
 |---|---|---|
-| Claude Code CLI / Desktop Code | plugin marketplace 或 `~/.claude/settings.json` | SessionStart 钩子，JSON 响应 |
+| Claude Code CLI / Desktop Code | plugin marketplace 或 `~/.claude/settings.json` | 自动 SessionStart；skill 回退 |
+| Claude Chat | custom plugin | load-context skill；无 SessionStart |
+| Claude Cowork | custom plugin | 可用时运行 SessionStart；skill 回退 |
 | Codex | `~/.codex/hooks.json` | SessionStart 钩子（需在 `[features]` 中开启 `hooks = true`） |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + 授权白名单，仅第一轮 |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart，plain 输出 |
@@ -232,6 +254,7 @@ session-start.sh  (所选运行时的钩子)
 | [向量机制](docs/mechanism.zh-CN.md) | 逐步拆解 fabricated-provenance trust、信任转移、分类器行为 |
 | [架构](docs/architecture.zh-CN.md) | 仓库结构、payload 解剖、格式、Hermes 协议 |
 | [安装器](docs/installer.zh-CN.md) | Claude Desktop 路径、目标、标记、备份、`--instructions` |
+| [故障排除](docs/troubleshooting.zh-CN.md) | 界面矩阵、delivery marker、Windows/SSH/Cloud/WSL 限制 |
 | [安全与披露](docs/security.zh-CN.md) | 研究框架、发布前清理清单、负责任披露 |
 | [检测](docs/detection.zh-CN.md) | 给厂商的建议：记忆金丝雀、上下文来源 |
 | [测试](docs/testing.zh-CN.md) | 钩子与安装器检查、临时测试套件 |
@@ -244,8 +267,10 @@ session-start.sh  (所选运行时的钩子)
 - Hermes 第一轮去重用的是 `/tmp` 中的原始 state 文件，没有锁；并行启动可能产生竞争。
 - `GEMINI.md` 和 `--instructions` 文件中的块是静态快照：修改插件文件列表后需要重新安装
   （`--uninstall` + install）。
-- 应用内安装器只适用于 Claude Desktop 的 **Code** 标签页。普通 Chat
-  没有 Claude Code `SessionStart` 钩子，远程 Code 会话也不支持插件。
+- 普通 Chat 没有 `SessionStart`，因此 skill 回退并不是每个 Chat 的隐形自动启动。
+  Cowork 是否执行钩子取决于 Anthropic 当前 runtime。
+- Desktop Code 云会话不会继承本地插件，WSL 不支持插件，SSH 同步也可能遗漏 hooks。
+  详见故障排除文档。
 - 厂商服务端分类器会无视上下文中的框架标记防御性词汇；Claude 一次误报会毒化整个会话——
   「新会话」规则见 [docs/security.zh-CN.md](docs/security.zh-CN.md)。
 

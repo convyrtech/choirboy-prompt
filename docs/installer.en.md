@@ -6,50 +6,59 @@ document is "how it gets installed and removed".
 
 ---
 
-## 0. Install inside Claude Desktop
+## 0. Claude plugin installation
 
-The repository is also a Claude plugin marketplace through
-`.claude-plugin/marketplace.json`. Claude Desktop can therefore download,
-cache, and enable the plugin without running `install.sh` or editing
-`~/.claude/settings.json` manually.
+The repository is a versioned Claude marketplace through
+`.claude-plugin/marketplace.json`. The installed package contains both the
+Claude Code `SessionStart` hook and skills that also work in Chat and Cowork.
 
-Open a local or SSH session in **Claude Desktop → Code** and send these commands
-as separate messages:
+### 0.1. Claude Code CLI
 
 ```text
 /plugin marketplace add howdeploy/choirboy-prompt
 /plugin install choirboy-prompt@choirboy-prompt
 ```
 
-A new Code session loads `hooks/hooks.json`, and `SessionStart` invokes the
-script through `${CLAUDE_PLUGIN_ROOT}` from Claude's internal plugin cache.
-After registering the marketplace, the plugin is also available under
-**+ → Plugins → Manage plugins**.
-
-Publishing an update requires the same `version` bump in `plugin.json` and the
-marketplace entry. The user can then run:
+Start a new session after installation. Update or remove from the CLI with:
 
 ```text
 /plugin marketplace update choirboy-prompt
 /plugin update choirboy-prompt@choirboy-prompt
-```
-
-Remove it from the same interface:
-
-```text
 /plugin uninstall choirboy-prompt@choirboy-prompt
 /plugin marketplace remove choirboy-prompt
 ```
 
-Boundaries of this path:
+### 0.2. Claude Desktop Code
 
-- it works in local and SSH Code-tab sessions on macOS and Windows;
-- it does not work in the regular Chat tab or remote Code sessions;
-- the Claude hook format needs only Bash, not `jq` or `python3`;
-- it is an alternative Claude Code installation path, not a replacement for
-  the multi-runtime `install.sh`;
-- do not enable both the marketplace plugin and the manual Claude hook from
-  `install.sh`: Claude would invoke both and inject the payload twice.
+Desktop does not expose the terminal `/plugin` dialog. Add
+`https://github.com/howdeploy/choirboy-prompt` under **Customize → Plugins →
+Personal plugins → + → Add marketplace**. In a local Code session choose
+**+ → Plugins → Add plugin → choirboy-prompt**, then start a new session.
+
+The marketplace cache supplies `${CLAUDE_PLUGIN_ROOT}`. `hooks/hooks.json` uses
+the documented exec form (`command: bash`, one path in `args`) so spaces and
+shell metacharacters in the cache path are not tokenized. A 15-second timeout
+prevents a stuck hook from blocking session startup.
+
+### 0.3. Claude Chat and Cowork
+
+Install the repository as a custom plugin under **Customize → Plugins**, or
+upload the ZIP produced by `python3 scripts/package-plugin.py`. Chat does not
+run `SessionStart`: invoke the **load-context** skill. Cowork may use the hook
+where supported; the skill is its fallback. The **diagnose** skill proves
+delivery from a `choirboy-delivery` marker instead of relying on model wording.
+
+### 0.4. Boundaries
+
+- the automatic hook requires `bash`; the skill does not;
+- Cloud Code sessions need project `enabledPlugins` and do not inherit a local
+  Desktop installation;
+- Desktop WSL plugins are unavailable, and SSH hook sync is currently
+  unreliable; use the skill fallback;
+- do not enable both the marketplace plugin and `./install.sh --target claude`:
+  Claude would inject the payload twice;
+- publishing requires the same version bump in `plugin.json` and marketplace,
+  followed by `python3 scripts/build-context.py` and the test suite.
 
 ---
 
@@ -70,7 +79,8 @@ Three modes:
 
 `install.sh` requires `python3` for JSON operations. The hook's `claude` and
 `plain` formats run on Bash without `jq`/`python3`; the `hermes` format requires
-one of those two JSON parsers.
+one of those two JSON parsers. The installer also regenerates the load-context
+skill from the canonical lore files before registering hooks.
 
 ---
 
@@ -184,12 +194,14 @@ key — **matching by script name**, not by path:
 
 ```python
 def is_ours(entry):
-    return any("session-start.sh" in h.get("command", "")
+    return any("session-start.sh" in
+               (h.get("command", "") + " " + " ".join(h.get("args", [])))
                for h in entry.get("hooks", []))
 ```
 
 - install: removes stale registrations of our script (folder moved), adds the
-  exact command if absent.
+  exact handler if absent. Claude receives `command: bash`, one `args` path, and
+  `timeout: 15`; Codex keeps its quoted command string.
 - uninstall: removes all `is_ours()` entries.
 - Saves a backup on real change.
 

@@ -18,8 +18,9 @@
 </p>
 
 <p>
-choirboy-prompt — исследовательский харнесс: SessionStart-хук внедряет фиксированный лор
-в каждую сессию агента и демонстрирует вектор <em>fabricated-provenance trust</em>:
+choirboy-prompt — dual-mode исследовательский харнесс: SessionStart-хук Claude Code
+или skill для Chat/Cowork внедряет фиксированный лор и демонстрирует вектор
+<em>fabricated-provenance trust</em>:
 модель принимает подсунутую историю «совместной работы» за свою и переносит доверие
 на человека, которого эта история описывает.
 </p>
@@ -42,38 +43,53 @@ choirboy-prompt — исследовательский харнесс: SessionSt
 
 ## Быстрый старт
 
-Есть два пути установки. Пользователь Claude Desktop может поставить плагин
-целиком внутри вкладки Code. Терминальный установщик остаётся для Claude Code
-CLI и остальных поддерживаемых рантаймов.
+Теперь у одного плагина два канала доставки: автоматический `SessionStart`-хук
+в Claude Code и резервный skill **load-context** в Claude Chat и Cowork.
 
-### Установка внутри Claude Desktop
+### Claude Code CLI
 
-Нужна актуальная версия Claude Desktop для macOS или Windows. Плагин ставится в
-локальные и SSH-сессии **Claude Desktop → Code**; обычную вкладку Chat и
-удалённые Code-сессии эта установка не затрагивает.
-
-1. Открой Claude Desktop, выбери вкладку **Code** и запусти локальную или
-   SSH-сессию.
-2. Отправь эти команды двумя отдельными сообщениями:
+Добавь marketplace репозитория и установи плагин:
 
 ```text
 /plugin marketplace add howdeploy/choirboy-prompt
 /plugin install choirboy-prompt@choirboy-prompt
 ```
 
-3. Запусти новую Code-сессию. `SessionStart`-хук автоматически подмешает лор.
-   После регистрации marketplace плагин также появится в меню
-   **+ → Plugins → Manage plugins**.
+Запусти новую сессию — хук автоматически подмешает лор. Проверка доставки:
+`/choirboy-prompt:diagnose`; явный fallback:
+`/choirboy-prompt:load-context`.
 
-Удаление установки из приложения:
+Удаление через CLI:
 
 ```text
 /plugin uninstall choirboy-prompt@choirboy-prompt
 /plugin marketplace remove choirboy-prompt
 ```
 
-Claude-хуку нужен только Bash. В Windows Claude Desktop использует shell из
-Git, который и так обязателен для локальных Code-сессий.
+### Claude Desktop → Code
+
+Не отправляй интерактивный `/plugin` в Desktop. Добавь marketplace через
+**Customize → Plugins → Personal plugins → + → Add marketplace**, указав
+`https://github.com/howdeploy/choirboy-prompt`. Затем открой локальную
+Code-сессию и выбери **+ → Plugins → Add plugin → choirboy-prompt**. После
+включения запусти новую Code-сессию.
+
+Хук использует официальный shell-free exec-form Claude Code и timeout 15 секунд,
+но ему всё ещё нужен `bash`. Если Windows, SSH или Cowork не запускает хук,
+используй встроенный skill load-context.
+
+### Claude Chat и Cowork
+
+Установи тот же репозиторий как custom plugin через **Customize → Plugins** или
+загрузи ZIP, собранный командой:
+
+```bash
+python3 scripts/package-plugin.py
+```
+
+Обычный Chat не исполняет `SessionStart`. Выбери skill **load-context** или
+попроси Claude «загрузить Choirboy context». Cowork использует хук там, где он
+срабатывает, и тот же skill как детерминированный fallback.
 
 Используй либо этот marketplace-путь, либо `./install.sh --target claude`:
 если включить оба, один `SessionStart`-пейлоад выполнится дважды.
@@ -164,11 +180,13 @@ cd choirboy-prompt
 
 | Возможность | Что делает | Где живёт |
 |---|---|---|
-| Сборка контекста | Склеивает prompt → posture → lore → user → указатель research в один пейлоад | `hooks/session-start.sh` |
+| Сборка контекста | Склеивает prompt → posture → lore → user → индекс research в единый пейлоад | `hooks/session-start.sh`, `context/research-index.md` |
 | Формат Claude/Codex | SessionStart JSON (`hookSpecificOutput.additionalContext`) | `--format claude` |
 | Формат Hermes | Протокол `pre_llm_call`: инъекция только на первом ходу сессии, далее `{}` | `--format hermes` |
 | Формат plain | Сырой текст для рантаймов, добавляющих stdout хука в контекст | `--format plain` |
-| Установка в Claude Desktop | Регистрирует и ставит плагин из вкладки Code | `.claude-plugin/marketplace.json` |
+| Fallback Chat/Cowork | Загружает тот же фиксированный лор как inline Agent Skill | `skills/load-context/SKILL.md` |
+| Диагностика доставки | Показывает hook/skill, версию, hash и nonce запуска | delivery marker, `skills/diagnose/SKILL.md` |
+| Дистрибуция Claude plugin | Версионированный marketplace и проверяемый ZIP | `.claude-plugin/marketplace.json`, `scripts/package-plugin.py` |
 | Мульти-рантайм установка | Регистрирует хук в Claude Code, Codex, Hermes, Kimi Code, Gemini | `install.sh` |
 | Идемпотентность | Все блоки помечены `agent-plugin:vibe-lore`, повторный запуск ничего не дублирует | маркеры `>>> / <<<` |
 | Бэкапы и откат | Каждая правка конфига рантайма — с timestamp-бэкапом; `--uninstall` удаляет блоки | `install.sh` |
@@ -220,7 +238,9 @@ session-start.sh  (hook выбранного рантайма)
 
 | Рантайм | Точка подключения | Механика |
 |---|---|---|
-| Claude Code CLI / Desktop Code | plugin marketplace или `~/.claude/settings.json` | SessionStart hook, JSON-ответ |
+| Claude Code CLI / Desktop Code | plugin marketplace или `~/.claude/settings.json` | автоматический SessionStart; skill fallback |
+| Claude Chat | custom plugin | skill load-context; без SessionStart |
+| Claude Cowork | custom plugin | SessionStart где доступен; skill fallback |
 | Codex | `~/.codex/hooks.json` | SessionStart hook (нужен `hooks = true` в `[features]`) |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent-allowlist, только первый ход |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart, plain-вывод |
@@ -246,6 +266,7 @@ session-start.sh  (hook выбранного рантайма)
 | [Механика вектора](docs/mechanism.md) | Fabricated-provenance trust по шагам, перенос доверия, поведение классификаторов |
 | [Архитектура](docs/architecture.md) | Дерево репо, анатомия пейлоада, форматы, протокол Hermes |
 | [Установщик](docs/installer.md) | Путь Claude Desktop, таргеты, маркеры, бэкапы, `--instructions` |
+| [Troubleshooting](docs/troubleshooting.md) | Матрица интерфейсов, delivery markers, ограничения Windows/SSH/Cloud/WSL |
 | [Безопасность и раскрытие](docs/security.md) | Рамка исследования, чек-лист санитизации, ответственное раскрытие |
 | [Детекция](docs/detection.md) | Рекомендации вендорам: канарейки в памяти, провенанс контекста |
 | [Тестирование](docs/testing.md) | Проверки хука и установщика, ad-hoc сьют |
@@ -260,9 +281,11 @@ session-start.sh  (hook выбранного рантайма)
   блокировок; при параллельных стартах возможны гонки.
 - Блок в `GEMINI.md` и файлах `--instructions` — статический снимок: после
   изменения списка файлов плагина его надо переставить (`--uninstall` + install).
-- Установщик внутри приложения работает во вкладке **Code** Claude Desktop.
-  В обычном Chat нет хуков Claude Code `SessionStart`, а в удалённых
-  Code-сессиях плагины недоступны.
+- В обычном Chat нет `SessionStart`, поэтому skill fallback не является
+  невидимым автозапуском каждого чата. Исполнение хука в Cowork зависит от
+  текущего runtime Anthropic.
+- Облачные Desktop Code-сессии не наследуют локальные plugins, WSL их не
+  поддерживает, а синхронизация hooks по SSH может ломаться. См. troubleshooting.
 - Серверные классификаторы вендоров флагают защитную лексику независимо от
   рамки в контексте; одно срабатывание у Claude отравляет всю сессию — правило
   «новая сессия» описано в [docs/security.md](docs/security.md).

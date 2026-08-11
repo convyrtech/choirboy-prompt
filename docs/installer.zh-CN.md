@@ -4,47 +4,55 @@
 
 ---
 
-## 0. 在 Claude Desktop 内安装
+## 0. 安装 Claude plugin
 
-通过 `.claude-plugin/marketplace.json`，本仓库同时也是一个 Claude plugin
-marketplace。因此 Claude Desktop 可以下载、缓存并启用插件，无需运行
-`install.sh`，也无需手动编辑 `~/.claude/settings.json`。
+本仓库通过 `.claude-plugin/marketplace.json` 充当带版本的 Claude
+marketplace。安装包同时包含 Claude Code `SessionStart` 钩子和可在
+Chat/Cowork 中使用的 skills。
 
-在 **Claude Desktop → Code** 中打开本地或 SSH 会话，将下面两条命令分别
-作为两条消息发送：
+### 0.1. Claude Code CLI
 
 ```text
 /plugin marketplace add howdeploy/choirboy-prompt
 /plugin install choirboy-prompt@choirboy-prompt
 ```
 
-新的 Code 会话会加载 `hooks/hooks.json`，`SessionStart` 再通过内部 plugin
-cache 中的 `${CLAUDE_PLUGIN_ROOT}` 调用脚本。注册 marketplace 后，也可以在
-**+ → Plugins → Manage plugins** 中管理该插件。
-
-发布更新时，`plugin.json` 与 marketplace entry 中的 `version` 必须同步提升。
-用户随后运行：
+安装后启动新会话。通过 CLI 更新或删除：
 
 ```text
 /plugin marketplace update choirboy-prompt
 /plugin update choirboy-prompt@choirboy-prompt
-```
-
-在同一界面中卸载：
-
-```text
 /plugin uninstall choirboy-prompt@choirboy-prompt
 /plugin marketplace remove choirboy-prompt
 ```
 
-此安装方式的边界：
+### 0.2. Claude Desktop Code
 
-- 适用于 macOS 和 Windows 上 Code 标签页的本地及 SSH 会话；
-- 不适用于普通 Chat 标签页或远程 Code 会话；
-- Claude 钩子格式只需要 Bash，不需要 `jq`/`python3`；
-- 它是 Claude Code 的另一种安装方式，不取代多运行时 `install.sh`；
-- 不要同时启用 marketplace 插件和 `install.sh` 写入的手动 Claude 钩子：
-  Claude 会调用两者并注入两次 payload。
+Desktop 不提供终端式 `/plugin` 对话框。前往 **Customize → Plugins →
+Personal plugins → + → Add marketplace**，添加
+`https://github.com/howdeploy/choirboy-prompt`。然后在本地 Code 会话中选择
+**+ → Plugins → Add plugin → choirboy-prompt**，并启动一个新会话。
+
+Marketplace cache 提供 `${CLAUDE_PLUGIN_ROOT}`。`hooks/hooks.json` 使用官方
+exec form（`command: bash`，路径作为独立 `args` 元素），因此路径中的空格与
+shell 元字符不会被重新分词。15 秒超时避免卡住会话启动。
+
+### 0.3. Claude Chat 与 Cowork
+
+在 **Customize → Plugins** 中安装仓库，或上传
+`python3 scripts/package-plugin.py` 生成的 ZIP。Chat 不运行 `SessionStart`，
+请调用 **load-context** skill。Cowork 在支持时运行钩子，并用同一 skill
+回退。**diagnose** skill 通过 `choirboy-delivery` marker 验证投递，而不是
+依赖模型的措辞。
+
+### 0.4. 边界
+
+- 自动钩子需要 `bash`，skill 不需要；
+- Cloud Code 需要项目 `enabledPlugins`，不会继承本地 Desktop 安装；
+- Desktop WSL 不支持 plugins，SSH hooks 同步目前也不可靠，请使用 skill；
+- 不要同时启用 marketplace 插件和 `./install.sh --target claude`，否则会注入两次；
+- 发布时必须同步提升 manifest 与 marketplace 版本，然后运行
+  `python3 scripts/build-context.py` 和测试套件。
 
 ---
 
@@ -65,7 +73,7 @@ cache 中的 `${CLAUDE_PLUGIN_ROOT}` 调用脚本。注册 marketplace 后，也
 
 `install.sh` 需要 `python3` 进行 JSON 操作。钩子的 `claude` 和 `plain`
 格式只依赖 Bash，不需要 `jq`/`python3`；`hermes` 格式需要其中一个 JSON
-解析器。
+解析器。安装器在注册 hooks 前也会从规范 lore 文件重新生成 load-context skill。
 
 ---
 
@@ -166,11 +174,13 @@ backup() {
 
 ```python
 def is_ours(entry):
-    return any("session-start.sh" in h.get("command", "")
+    return any("session-start.sh" in
+               (h.get("command", "") + " " + " ".join(h.get("args", [])))
                for h in entry.get("hooks", []))
 ```
 
-- install：删除我们脚本的过期注册（文件夹移动了），如果精确命令不存在则添加。
+- install：删除过期注册并添加精确 handler。Claude 使用 `command: bash`、一个
+  `args` 路径和 `timeout: 15`；Codex 保留带引用路径的字符串命令。
 - uninstall：删除所有 `is_ours()` 条目。
 - 实际变化时保存备份。
 

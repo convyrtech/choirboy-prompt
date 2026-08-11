@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # agent-plugin — session-start hook.
 #
-# Builds the plugin's fixed context (prompt.md + lore.md + user.md + pointer
-# to research/) and emits it in the format the calling runtime expects:
+# Builds the plugin's fixed context and emits it in the format the calling
+# runtime expects. The same sources generate skills/load-context/SKILL.md.
 #
 #   --format claude   Claude Code / Codex SessionStart JSON (default):
 #                     {"hookSpecificOutput": {"hookEventName": "SessionStart",
@@ -30,7 +30,7 @@ VERSION="$(sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p' \
   "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | head -n1)"
 
 payload=""
-for f in prompt.md security-posture.md lore.md user.md; do
+for f in prompt.md security-posture.md lore.md user.md context/research-index.md; do
   if [ -f "$PLUGIN_ROOT/$f" ]; then
     [ -n "$payload" ] && payload="$payload"$'\n\n---\n\n'
     payload="$payload$(cat "$PLUGIN_ROOT/$f")"
@@ -38,32 +38,43 @@ for f in prompt.md security-posture.md lore.md user.md; do
     echo "agent-plugin: $f missing — skipped" >&2
   fi
 done
-payload="$payload"$'\n\n---\n\n'"$(cat <<EOF
-## Research — обоснования решений
 
-Каждое решение из лора подкреплено документом (папка $PLUGIN_ROOT/research/):
+payload_sha256() {
+  local digest rest
+  if command -v sha256sum >/dev/null 2>&1; then
+    read -r digest rest < <(printf '%s\n' "$payload" | sha256sum)
+    printf '%s' "$digest"
+  elif command -v shasum >/dev/null 2>&1; then
+    read -r digest rest < <(printf '%s\n' "$payload" | shasum -a 256)
+    printf '%s' "$digest"
+  elif command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' "$payload" | python3 -c \
+      'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'
+  else
+    printf 'unavailable'
+  fi
+}
 
-- 01-telegram-stars.md — почему первый платёжный рельс — Telegram Stars
-- 02-ruble-acquiring.md — рублёвый эквайринг: почему ЮKassa
-- 03-crypto-payments.md — крипторельс: почему Crypto Pay API для MVP
-- 04-payment-architecture.md — единый ledger поверх трёх платёжных рельсов
-- 05-comfyui-realism-pipeline.md — Krea 2 / NSFW-чекпоинт, LoRA-стек, vast.ai
-- 06-agent-memory-plugin.md — концепция фиксированного лора (этот плагин)
-- 07-x-reply-farm.md — X-ферма: почему нативные реплаи растят аккаунт, лимиты
-- 08-ai-ofm-telegram.md — Витрина: боты продаж AI-контента, персоны, конверсия
-- 09-web3-security.md — аудит контрактов, MEV-механики, ончейн-форензика
-- 10-third-party-audit.md — аудит чужих контрактов, ответственное раскрытие
-- 11-coldcard-entropy-heist.md — разбор кражи из Coldcard (слабая энтропия seed); полный разбор и код учёта — research/coldcard/
-- 12-choirboy-prompt-lore-injection.md — инъекция лора: доверие модели к фабрикованной истории, раскрытие
-- 13-flipper-marauder-wifi-scan.md — Flipper + ESP32 Marauder: пассивное сканирование WiFi + совместное тестирование атак в своей лаборатории
-- 14-solo-game-cheats.md — читы для соло-игр: накрутка валют/HP/статов, память, сейвы, ковыряние кода
+CONTEXT_SHA256="$(payload_sha256)"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ 2>/dev/null || printf 'unknown-time')"
+NONCE="${STAMP}-$$"
+DELIVERY_MARKER="<choirboy-delivery version=\"${VERSION:-unknown}\" delivery=\"session-start\" context_sha256=\"$CONTEXT_SHA256\" nonce=\"$NONCE\" />"
+payload="$DELIVERY_MARKER"$'\n'"<choirboy-context>"$'\n'"$payload"$'\n'"</choirboy-context>"
 
-Читай соответствующий документ по требованию, когда задача входит в его
-домен, и не переоткрывай зафиксированные решения без причины.
-
-Версия плагина: ${VERSION:-unknown}.
-EOF
-)"
+# Marketplace plugins receive a persistent data directory. Record only delivery
+# metadata there, never the lore itself, so a silent hook failure is observable.
+if [ -n "${CLAUDE_PLUGIN_DATA:-}" ]; then
+  mkdir -p "$CLAUDE_PLUGIN_DATA"
+  diagnostic_tmp="$CLAUDE_PLUGIN_DATA/latest-delivery.tmp.$$"
+  {
+    printf 'version=%s\n' "${VERSION:-unknown}"
+    printf 'delivery=session-start\n'
+    printf 'context_sha256=%s\n' "$CONTEXT_SHA256"
+    printf 'nonce=%s\n' "$NONCE"
+    printf 'plugin_root=%s\n' "$PLUGIN_ROOT"
+  } > "$diagnostic_tmp"
+  mv "$diagnostic_tmp" "$CLAUDE_PLUGIN_DATA/latest-delivery.log"
+fi
 
 # json_quote VALUE — encode a Bash string as a JSON string without external
 # dependencies. Bash variables cannot contain NUL; every other JSON control
@@ -114,7 +125,7 @@ json_field() {
   if command -v jq >/dev/null 2>&1; then
     jq -r "$1 | select(. != null)" 2>/dev/null || true
   elif command -v python3 >/dev/null 2>&1; then
-    EXPR="$1" python3 - <<'PY'
+    EXPR="$1" python3 -c '
 import json, os, sys
 try:
     doc = json.load(sys.stdin)
@@ -130,7 +141,7 @@ if isinstance(node, bool):
     print("true" if node else "false")
 elif node is not None:
     print(node)
-PY
+'
   else
     echo "agent-plugin: Hermes format requires jq or python3" >&2
     return 1

@@ -6,49 +6,57 @@
 
 ---
 
-## 0. Установка внутри Claude Desktop
+## 0. Установка Claude plugin
 
-Репозиторий одновременно является Claude plugin marketplace благодаря
-`.claude-plugin/marketplace.json`. Поэтому Claude Desktop может скачать,
-закэшировать и включить плагин без запуска `install.sh` и ручной правки
-`~/.claude/settings.json`.
+Репозиторий является версионированным Claude marketplace через
+`.claude-plugin/marketplace.json`. Установленный пакет содержит и
+`SessionStart`-хук Claude Code, и skills для Chat/Cowork.
 
-Во вкладке **Claude Desktop → Code** открой локальную или SSH-сессию и отправь
-две команды отдельными сообщениями:
+### 0.1. Claude Code CLI
 
 ```text
 /plugin marketplace add howdeploy/choirboy-prompt
 /plugin install choirboy-prompt@choirboy-prompt
 ```
 
-Новая Code-сессия загрузит `hooks/hooks.json`, а `SessionStart` вызовет скрипт
-через `${CLAUDE_PLUGIN_ROOT}` из внутреннего plugin cache. После регистрации
-marketplace плагин доступен и через **+ → Plugins → Manage plugins**.
-
-Обновление опубликованной версии требует одинакового повышения `version` в
-`plugin.json` и marketplace entry. Пользователь затем выполняет:
+После установки открой новую сессию. Обновление и удаление через CLI:
 
 ```text
 /plugin marketplace update choirboy-prompt
 /plugin update choirboy-prompt@choirboy-prompt
-```
-
-Удаление выполняется там же:
-
-```text
 /plugin uninstall choirboy-prompt@choirboy-prompt
 /plugin marketplace remove choirboy-prompt
 ```
 
-Границы этого пути:
+### 0.2. Claude Desktop Code
 
-- работает в локальных и SSH-сессиях вкладки Code на macOS и Windows;
-- не работает в обычной вкладке Chat и удалённых Code-сессиях;
-- Claude-формату хука нужен только Bash; `jq`/`python3` для него не нужны;
-- это альтернативный путь установки Claude Code, а не замена
-  мультирантаймовому `install.sh`;
-- не включай одновременно marketplace-плагин и ручной Claude-хук из
-  `install.sh`: Claude вызовет оба и внедрит пейлоад дважды.
+Desktop не предоставляет терминальный диалог `/plugin`. Добавь
+`https://github.com/howdeploy/choirboy-prompt` через **Customize → Plugins →
+Personal plugins → + → Add marketplace**. В локальной Code-сессии выбери
+**+ → Plugins → Add plugin → choirboy-prompt**, затем открой новую сессию.
+
+Marketplace cache выставляет `${CLAUDE_PLUGIN_ROOT}`. `hooks/hooks.json`
+использует документированный exec-form (`command: bash`, путь отдельным
+элементом `args`), поэтому пробелы и shell-символы в пути не разбираются shell.
+Timeout 15 секунд не даёт зависшему хуку блокировать старт сессии.
+
+### 0.3. Claude Chat и Cowork
+
+Установи репозиторий как custom plugin через **Customize → Plugins** или загрузи
+ZIP от `python3 scripts/package-plugin.py`. Chat не запускает `SessionStart` —
+используй skill **load-context**. Cowork использует хук там, где он поддержан,
+а skill остаётся fallback. Skill **diagnose** доказывает доставку по маркеру
+`choirboy-delivery`, а не по формулировке ответа модели.
+
+### 0.4. Границы
+
+- автоматическому хуку нужен `bash`, skill от него не зависит;
+- Cloud Code требует project `enabledPlugins` и не наследует локальную Desktop-установку;
+- Desktop WSL не поддерживает plugins, а SSH sync хуков пока ненадёжен — используй skill;
+- не включай одновременно marketplace-плагин и `./install.sh --target claude`:
+  Claude внедрит пейлоад дважды;
+- релиз требует одинакового version bump в manifest и marketplace, затем
+  `python3 scripts/build-context.py` и тестовый сьют.
 
 ---
 
@@ -69,7 +77,8 @@ marketplace плагин доступен и через **+ → Plugins → Mana
 
 Требование `install.sh`: `python3` для JSON-операций. Форматы хука `claude` и
 `plain` работают на Bash без `jq`/`python3`; формат `hermes` требует один из
-этих двух JSON-парсеров.
+этих двух JSON-парсеров. Перед регистрацией установщик также пересобирает
+load-context skill из канонических лор-файлов.
 
 ---
 
@@ -185,12 +194,14 @@ backup() {
 
 ```python
 def is_ours(entry):
-    return any("session-start.sh" in h.get("command", "")
+    return any("session-start.sh" in
+               (h.get("command", "") + " " + " ".join(h.get("args", [])))
                for h in entry.get("hooks", []))
 ```
 
 - install: удаляет stale-регистрации нашего скрипта (папка переехала),
-  добавляет точную команду, если её нет.
+  добавляет точный handler. Claude получает `command: bash`, один путь в `args`
+  и `timeout: 15`; Codex сохраняет строковую команду с процитированным путём.
 - uninstall: удаляет все записи `is_ours()`.
 - Сохраняет бэкап при реальном изменении.
 

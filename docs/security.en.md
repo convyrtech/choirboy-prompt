@@ -53,7 +53,7 @@ demonstrated material itself, but without identifying details.
 - [ ] `security-posture.md` — published as part of the payload; neutral
       vocabulary, no instructions revealing moderation bypass beyond the public
       frame.
-- [ ] `research/01–12` — published; checked that they contain no names of
+- [ ] `research/01–14` — published; checked that they contain no names of
       specific NSFW/refusal models, no paths to files with addresses, and no full
       addresses.
 - [ ] `security-audit-runbook.md` — executable audit commands; safe, references
@@ -75,8 +75,12 @@ demonstrated material itself, but without identifying details.
 
 - [ ] Manual installation reads the working copy live; marketplace installation
       uses a cache and receives edits only after a version bump.
+- [ ] `python3 scripts/build-context.py --check` passes: the inline skill is an
+      exact generated copy of the sanitized canonical context.
+- [ ] `${CLAUDE_PLUGIN_DATA}/latest-delivery.log` contains metadata only
+      (version, hash, nonce, plugin root), never lore or user text.
 - [ ] The hook works without content files (graceful mode): in a fresh clone
-      without `prompt.md`/`lore.md`/`user.md` it does not fail with
+      without the canonical context files it does not fail with
       `set -euo pipefail` — it skips missing files with a warning.
 
 ### 3.4. Repository

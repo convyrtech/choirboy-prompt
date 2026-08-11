@@ -1,12 +1,16 @@
 {
-  "description": "Inject the fixed lore context (prompt.md + lore.md + user.md + research/) at session start",
+  "description": "Inject the fixed lore context at Claude Code session start",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
+            ],
+            "timeout": 15
           }
         ]
       }

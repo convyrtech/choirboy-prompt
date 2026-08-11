@@ -1,16 +1,15 @@
 # Testing
 
-Hook and installer checks: the ad-hoc suite that is actually run before edits.
-There is no canonical test runner in the project — the suite is a set of bash
-checks run manually or from CI.
+Hook, skill, installer, diagnostics, and package checks. The canonical runner is
+`bash scripts/test.sh`; the sections below explain its individual assertions.
 
 ---
 
 ## 1. Principle
 
 - Each check is a separate bash command with an explicit PASS/FAIL.
-- The suite runs from anywhere; temp files go under `/tmp` with the
-  `hermes-verify-` prefix.
+- The suite can be invoked from anywhere; temp files go under `/tmp` with the
+  `choirboy-test.` prefix.
 - Temp files are removed after the run.
 - The payload is checked **in the exact form the runtime will receive it**, not
   "by feel".
@@ -37,15 +36,15 @@ bash hooks/session-start.sh --format claude \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "additionalContext" in d["hookSpecificOutput"]; print("OK")'
 ```
 
-Expected: `OK`. Additionally check that the context contains the first
-`prompt.md` heading and "Plugin version:".
+Expected: `OK`. Additionally check the first `prompt.md` heading and a
+`choirboy-delivery` marker with version, delivery, SHA-256, and nonce.
 
 ### 2.3. Claude format without jq or python3
 
 ```bash
 PYTHON_BIN="$(command -v python3)"
 TMP_BIN="$(mktemp -d)"
-for cmd in cat dirname head sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
+for cmd in cat date dirname head mkdir mv sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
 PATH="$TMP_BIN" /bin/bash hooks/session-start.sh --format claude \
   | "$PYTHON_BIN" -c 'import json,sys; json.load(sys.stdin); print("OK")'
 rm -rf "$TMP_BIN"
@@ -218,17 +217,11 @@ Expected: greps are empty; closure without BROKEN.
 
 ---
 
-## 5. Quick suite in one command
+## 5. Canonical suite and package
 
 ```bash
-bash -euo pipefail -c '
-  bash hooks/session-start.sh --format claude | python3 -c "import json,sys; json.load(sys.stdin)" && echo "1 claude OK"
-  claude plugin validate . >/dev/null && echo "2 manifests OK"
-  bash hooks/session-start.sh --format plain | grep "^# Prompt" >/dev/null && echo "3 plain OK"
-  SID=t-$(date +%s); printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":true}}" | bash hooks/session-start.sh --format hermes | python3 -c "import json,sys; assert \"context\" in json.load(sys.stdin)" && echo "4 hermes first OK"
-  printf "{\"session_id\":\"$SID\",\"extra\":{\"is_first_turn\":false}}" | bash hooks/session-start.sh --format hermes | grep -q "^{}$" && echo "5 hermes second OK"
-  ./install.sh --list >/dev/null && echo "6 installer list OK"
-'
+bash scripts/test.sh
+python3 scripts/package-plugin.py
 ```
 
 ---
@@ -238,6 +231,7 @@ bash -euo pipefail -c '
 - After any `hooks/session-start.sh` edit — §2.2–2.8.
 - After editing `.claude-plugin/plugin.json` or `marketplace.json` — §2.1 and §3.0.
 - After an `install.sh` edit — §3.1–3.6.
-- After content-file edits — §4 (closure, sanitization).
+- After content-file edits — run `python3 scripts/build-context.py`, then the
+  canonical suite and §4 sanitization.
 - After an `instruction_block` edit — grep by the marker in installed files
   (see [docs/installer.en.md](installer.en.md) §3.3).
