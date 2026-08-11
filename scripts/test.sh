@@ -126,6 +126,35 @@ bash "$missing_root/hooks/session-start.sh" --format plain > "$TEST_ROOT/missing
 grep -q '<choirboy-context>' "$TEST_ROOT/missing.txt"
 pass "graceful missing-content mode"
 
+crlf_root="$TEST_ROOT/crlf-content"
+mkdir -p "$crlf_root/hooks" "$crlf_root/.claude-plugin" \
+  "$crlf_root/context" "$crlf_root/skills/load-context"
+cp hooks/session-start.sh "$crlf_root/hooks/"
+cp .claude-plugin/plugin.json "$crlf_root/.claude-plugin/"
+cp skills/load-context/SKILL.md "$crlf_root/skills/load-context/"
+cp prompt.md security-posture.md lore.md user.md "$crlf_root/"
+cp context/research-index.md "$crlf_root/context/"
+python3 - "$crlf_root" <<'PY'
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+for relative in ("prompt.md", "security-posture.md", "lore.md", "user.md", "context/research-index.md"):
+    path = root / relative
+    path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+PY
+bash "$crlf_root/hooks/session-start.sh" --format claude > "$TEST_ROOT/crlf.json"
+python3 - "$TEST_ROOT/crlf.json" "$crlf_root/skills/load-context/SKILL.md" <<'PY'
+import json, re, sys
+from pathlib import Path
+
+context = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["hookSpecificOutput"]["additionalContext"]
+hook_hash = re.search(r'delivery="session-start" context_sha256="([0-9a-f]{64})"', context).group(1)
+skill_hash = re.search(r'delivery="skill" context_sha256="([0-9a-f]{64})"', Path(sys.argv[2]).read_text(encoding="utf-8")).group(1)
+assert hook_hash == skill_hash
+PY
+pass "CRLF context normalization"
+
 manual_home="$TEST_ROOT/manual-home"
 manual_settings="$manual_home/settings.json"
 mkdir -p "$manual_home"
@@ -181,19 +210,22 @@ required = {
 }
 with zipfile.ZipFile(sys.argv[1]) as archive:
     assert required.issubset(archive.namelist())
+    assert not any(name.startswith("sessions/") for name in archive.namelist())
     mode = archive.getinfo("hooks/session-start.sh").external_attr >> 16
     assert mode & stat.S_IXUSR
 PY
 pass "custom-plugin ZIP"
 
 python3 - <<'PY'
-import re
+import re, subprocess
 from pathlib import Path
 
 missing = []
-for document in Path(".").rglob("*.md"):
-    if ".git" in document.parts:
-        continue
+tracked = subprocess.run(
+    ["git", "ls-files", "*.md"], check=True, capture_output=True, text=True
+).stdout.splitlines()
+for name in tracked:
+    document = Path(name)
     text = document.read_text(encoding="utf-8")
     for target in re.findall(r"\]\(([^)]+)\)", text):
         target = target.strip("<>").split("#", 1)[0]

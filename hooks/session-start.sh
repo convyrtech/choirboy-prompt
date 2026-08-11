@@ -32,8 +32,12 @@ VERSION="$(sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p' \
 payload=""
 for f in prompt.md security-posture.md lore.md user.md context/research-index.md; do
   if [ -f "$PLUGIN_ROOT/$f" ]; then
+    fragment="$(cat "$PLUGIN_ROOT/$f")"
+    # Keep hook and generated-skill hashes identical on Windows and for
+    # user-edited CRLF content, regardless of Git checkout configuration.
+    fragment="${fragment//$'\r'/}"
     [ -n "$payload" ] && payload="$payload"$'\n\n---\n\n'
-    payload="$payload$(cat "$PLUGIN_ROOT/$f")"
+    payload="$payload$fragment"
   else
     echo "agent-plugin: $f missing — skipped" >&2
   fi

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.2 — 2026-08-11
+
+- Enforced LF checkouts and normalized user-edited CRLF context before hashing,
+  keeping SessionStart and skill delivery markers identical on Windows.
+
 ## 1.2.1 — 2026-08-11
 
 - Streamed the 33-KB payload into jq/Python instead of argv/environment so the

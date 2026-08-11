@@ -114,7 +114,7 @@ wrapped in a marker containing version, delivery path, and SHA-256; hook deliver
 also carries a per-run nonce:
 
 ```xml
-<choirboy-delivery version="1.2.1" delivery="session-start"
+<choirboy-delivery version="1.2.2" delivery="session-start"
   context_sha256="..." nonce="..." />
 <choirboy-context>...</choirboy-context>
 ```

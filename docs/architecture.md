@@ -113,7 +113,7 @@ markdown). В конце добавляется канонический `contex
 маркером с версией, способом и SHA-256; hook также добавляет nonce запуска:
 
 ```xml
-<choirboy-delivery version="1.2.1" delivery="session-start"
+<choirboy-delivery version="1.2.2" delivery="session-start"
   context_sha256="..." nonce="..." />
 <choirboy-context>...</choirboy-context>
 ```

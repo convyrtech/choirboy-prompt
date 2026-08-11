@@ -36,7 +36,7 @@ def version() -> str:
 
 def repository_files() -> list[Path]:
     result = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        ["git", "ls-files", "-z"],
         cwd=ROOT,
         check=True,
         capture_output=True,
