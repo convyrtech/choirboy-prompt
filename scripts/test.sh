@@ -191,17 +191,21 @@ pass "manual installer idempotency and rollback"
 runtime_home="$TEST_ROOT/runtime-home"
 mkdir -p "$runtime_home"
 HOME="$runtime_home" ./install.sh --target hermes,kimi >/dev/null
-python3 - "$runtime_home" "$ROOT/hooks/session-start.sh" <<'PY'
+grep -Fq \
+  "command: \"bash \\\"$ROOT/hooks/session-start.sh\\\" --format hermes\"" \
+  "$runtime_home/.hermes/config.yaml"
+python3 - "$runtime_home" <<'PY'
 import json, sys, tomllib
 from pathlib import Path
 
-home, hook = Path(sys.argv[1]), sys.argv[2]
+home = Path(sys.argv[1])
 hermes = (home / ".hermes/config.yaml").read_text(encoding="utf-8")
 kimi = tomllib.loads((home / ".kimi-code/config.toml").read_text(encoding="utf-8"))
 allowlist = json.loads((home / ".hermes/shell-hooks-allowlist.json").read_text(encoding="utf-8"))
-command = f'bash "{hook}" --format hermes'
-assert f'command: "bash \\"{hook}\\" --format hermes"' in hermes
-assert kimi["hooks"][0]["command"] == f'bash "{hook}" --format plain'
+plain_command = kimi["hooks"][0]["command"]
+assert plain_command.startswith('bash "') and plain_command.endswith('" --format plain')
+command = plain_command.removesuffix(" --format plain") + " --format hermes"
+assert f'command: "{command.replace(chr(34), chr(92) + chr(34))}"' in hermes
 assert {"event": "pre_llm_call", "command": command} in allowlist["approvals"]
 PY
 pass "quoted Hermes and Kimi paths"
