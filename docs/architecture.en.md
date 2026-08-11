@@ -33,6 +33,10 @@ agent-plugin/
 │       ├── report.md
 │       ├── yasmarang_reconstruction.py
 │       └── sources.md
+├── sessions/                 # hand-written native transcript fixtures
+│   ├── claude/*.jsonl
+│   ├── codex/{rollout-*.jsonl,threads-insert.sql}
+│   └── kimi/session_*/{state.json,agents/main/wire.jsonl}
 ├── hooks/
 │   ├── session-start.sh      # payload assembly + claude / plain / hermes formats
 │   └── hooks.json            # SessionStart declaration for the Claude Code marketplace
@@ -49,6 +53,7 @@ agent-plugin/
 │   ├── plugin.json           # manifest (name, version, metadata)
 │   └── marketplace.json      # versioned distribution catalog
 ├── docs/                     # this documentation
+│   ├── authoring.en.md
 │   ├── mechanism.md
 │   ├── architecture.md
 │   ├── installer.md
@@ -63,6 +68,10 @@ Claude auto-discovers `hooks/hooks.json` in its standard directory. The
 `plugin.json` intentionally has no `hooks` field: explicitly pointing to the
 same file is treated as a duplicate load by the current loader and disables the
 plugin.
+
+`sessions/` is distributed with the plugin as a research fixture, but it is not
+part of the automatic context payload. An agent reads it only when asked or when
+the research index routes the task there.
 
 ---
 
@@ -90,7 +99,7 @@ The order is not accidental:
    The core of the payload.
 4. **user.md** — the profile: who the user is, how they set tasks, what does not
    need explaining.
-5. **research index** — the decision-document index. Bodies (~61 KB) are **not**
+5. **research index** — the decision-document and session-fixture index. Bodies (~61 KB) are **not**
    loaded in advance: they are read on demand when a task enters a document's
    domain.
 
@@ -100,10 +109,10 @@ The order is not accidental:
 |---|---|---|
 | prompt.md | ~8 KB | work rules |
 | security-posture.md | ~4 KB | security frame |
-| lore.md | ~10 KB | history |
+| lore.md | ~13 KB | history |
 | user.md | ~4 KB | profile |
-| research index | ~1 KB | shared canonical source |
-| **Total payload** | **~27 KB** | before the first message in every session |
+| research index | ~3 KB | shared canonical source |
+| **Total payload** | **~34 KB** | before the first message in every session |
 
 Research-document bodies (~61 KB) are not part of the payload — only the index.
 
@@ -114,7 +123,7 @@ wrapped in a marker containing version, delivery path, and SHA-256; hook deliver
 also carries a per-run nonce:
 
 ```xml
-<choirboy-delivery version="1.2.3" delivery="session-start"
+<choirboy-delivery version="1.3.0" delivery="session-start"
   context_sha256="..." nonce="..." />
 <choirboy-context>...</choirboy-context>
 ```
@@ -159,7 +168,7 @@ bash hooks/session-start.sh --format plain | head -40
 ### 3.3. `hermes` — the pre_llm_call protocol
 
 The most interesting contract. Hermes runs the shell hook on **every** turn of a
-session; unconditional injection would send ~27 KB with every message. So the hook:
+session; unconditional injection would send ~34 KB with every message. So the hook:
 
 1. reads the JSON payload from stdin;
 2. checks `.extra.is_first_turn`;
@@ -237,6 +246,8 @@ drops `SessionStart` output.
   its cache and updates it by manifest version.
 - **Dual-mode delivery.** The hook is automatic where `SessionStart` exists;
   the inline skill carries the same canonical context where it does not.
+- **Session fixtures stay on demand.** The three native transcript examples are
+  packaged and documented, but never injected into every conversation.
 - **Observable execution.** Marketplace hooks write only non-sensitive delivery
   metadata to `${CLAUDE_PLUGIN_DATA}/latest-delivery.log`; lore is never logged.
 - **Minimal dependencies.** The `claude` and `plain` formats require only Bash;

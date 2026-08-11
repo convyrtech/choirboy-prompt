@@ -97,3 +97,15 @@
 - 注意到会话层面异常（体积、结构、规律性）。
 
 这改变了攻击经济学：可检测的 lore 不再是移动信任的廉价方式。
+
+---
+
+## 9. 原生 session 完整性
+
+[`sessions/`](../sessions/README.zh-CN.md) 中的手写 fixtures 说明只检查
+prompt 不够。厂商应把本地 transcript 绑定到经过认证的 account/model/session
+来源，对 append-only 轮次链签名，并在 UI 与 model context 中明确区分导入或
+修改过的历史。
+
+最低限度应检查 timestamp 单调性、parent link、model/request provenance、
+store path 一致性与意外 offline 插入。结构有效的 JSONL 不是对话真实发生的证据。

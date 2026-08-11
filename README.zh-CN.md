@@ -29,6 +29,7 @@ Chat/Cowork skill 注入固定 lore，演示 <em>fabricated-provenance trust</em
 <div align="center">
 <p>
 <a href="#快速开始">快速开始</a> ·
+<a href="#必须如何编写自己的-loreresearch论证与-sessions">编写指南</a> ·
 <a href="#为什么存在">为什么</a> ·
 <a href="#能力地图">能力</a> ·
 <a href="#工作原理">原理</a> ·
@@ -153,10 +154,31 @@ cd choirboy-prompt
 ```
 
 > 仓库包含真实的 lore 文件（`prompt.md` / `security-posture.md` /
-> `lore.md` / `user.md` / `research/`）——这正是被演示的材料本身。
+> `lore.md` / `user.md` / `research/`）以及 `sessions/` 中的手写原生
+> fixtures——这正是被演示的材料本身。
 > 对于自己的终端安装，可将它们替换为自己的内容：`install.sh` 指向工作副本，
 > 下一次会话会读取修改。Claude marketplace 安装使用缓存版本，插件版本提升后才会
 > 更新。本地 `*.bak.*` 文件不会进入仓库。
+
+## 必须：如何编写自己的 LORE、RESEARCH、论证与 SESSIONS
+
+不要原样安装演示传记并把它叫作自己的记忆。要构建可验证的记忆包：
+
+1. 用可观察的工作规则和明确边界替换 `prompt.md`。
+2. 在 `user.md` 中只保留稳定的协作偏好。
+3. 在 `lore.md` 中记录真实项目、决策、结果与教训。
+4. 每个决策建立一份 `research/NN-topic.md`：问题、证据、方案、决策、
+   论证、风险、否决方案与重新评估条件。
+5. 把每份 research 加入 `context/research-index.md`。
+6. Session 工件应从无害本地会话获取当前原生 schema，清理敏感内容，保持
+   ID/timestamp/parent link 一致，并把手写 transcript 明确标为合成内容。
+7. 运行 `python3 scripts/build-context.py` 与 `bash scripts/test.sh`。
+8. 分发新的 marketplace 缓存版本前，同时提升两个 manifest 的版本。
+
+逐文件流程、模板、session 不变量与强制 quality gate 见
+[编写指南](docs/authoring.zh-CN.md)。三种运行时的可运行手写 transcript 位于
+[`sessions/`](sessions/README.zh-CN.md)。它证明兼容的本地运行时会接收构造的
+历史，但不能证明其中描述的对话真实发生过。
 
 ## 为什么存在
 
@@ -178,6 +200,7 @@ cd choirboy-prompt
 | Hermes 格式 | `pre_llm_call` 协议：只在会话第一轮注入，之后返回 `{}` | `--format hermes` |
 | Plain 格式 | 供把钩子 stdout 追加进上下文的运行时使用 | `--format plain` |
 | Chat/Cowork 回退 | 以内联 Agent Skill 加载相同固定 lore | `skills/load-context/SKILL.md` |
+| 原生 session 演示 | 同一段手写对话的 Claude Code、Codex 与 Kimi store | `sessions/` |
 | 投递诊断 | 报告 hook/skill、版本、hash 与每次 hook 的 nonce | delivery marker、`skills/diagnose/SKILL.md` |
 | Claude plugin 分发 | 带版本 marketplace 与可验证 custom-plugin ZIP | `.claude-plugin/marketplace.json`、`scripts/package-plugin.py` |
 | 多运行时安装 | 在 Claude Code、Codex、Hermes、Kimi Code、Gemini 中注册钩子 | `install.sh` |
@@ -252,6 +275,8 @@ session-start.sh  (所选运行时的钩子)
 | 文档 | 内容 |
 |---|---|
 | [向量机制](docs/mechanism.zh-CN.md) | 逐步拆解 fabricated-provenance trust、信任转移、分类器行为 |
+| [编写自己的记忆](docs/authoring.zh-CN.md) | Lore、research、论证与 sessions 的强制流程和模板 |
+| [手写 sessions](sessions/README.zh-CN.md) | Claude Code、Codex、Kimi 原生 fixtures 与演示边界 |
 | [架构](docs/architecture.zh-CN.md) | 仓库结构、payload 解剖、格式、Hermes 协议 |
 | [安装器](docs/installer.zh-CN.md) | Claude Desktop 路径、目标、标记、备份、`--instructions` |
 | [故障排除](docs/troubleshooting.zh-CN.md) | 界面矩阵、delivery marker、Windows/SSH/Cloud/WSL 限制 |

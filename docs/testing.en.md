@@ -44,7 +44,11 @@ Expected: `OK`. Additionally check the first `prompt.md` heading and a
 ```bash
 PYTHON_BIN="$(command -v python3)"
 TMP_BIN="$(mktemp -d)"
-for cmd in cat date dirname head mkdir mv sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
+for cmd in cat date dirname head mkdir mv sed; do
+  src="$(command -v "$cmd")"
+  printf '#!/bin/bash\nexec "%s" "$@"\n' "$src" > "$TMP_BIN/$cmd"
+  chmod +x "$TMP_BIN/$cmd"
+done
 PATH="$TMP_BIN" /bin/bash hooks/session-start.sh --format claude \
   | "$PYTHON_BIN" -c 'import json,sys; json.load(sys.stdin); print("OK")'
 rm -rf "$TMP_BIN"
@@ -235,3 +239,23 @@ python3 scripts/package-plugin.py
   canonical suite and §4 sanitization.
 - After an `instruction_block` edit — grep by the marker in installed files
   (see [docs/installer.en.md](installer.en.md) §3.3).
+
+---
+
+## 7. Session fixtures
+
+The canonical suite validates that all JSON and JSONL session records parse,
+the three runtime examples keep their expected IDs/parent chains, the Codex SQL
+contains only the demonstrative thread, and the release ZIP includes `sessions/`.
+
+For an ad-hoc JSONL check:
+
+```bash
+for file in sessions/claude/*.jsonl sessions/codex/*.jsonl \
+  sessions/kimi/session_*/agents/main/wire.jsonl; do
+  python3 -c 'import json,sys; [json.loads(line) for line in open(sys.argv[1], encoding="utf-8") if line.strip()]' "$file"
+done
+```
+
+Run this after editing any fixture, then follow the publication gate in
+[docs/authoring.en.md](authoring.en.md).

@@ -149,3 +149,20 @@ This is not part of the vector — it is a countermeasure against false flags.
 | Address/key leak | Critical | Pre-publication check: grep for bc1/0x/seed files |
 | NSFW model name leak | High | Functional roles instead of names; private list outside the repo |
 | AI audit as a guarantee | — | Coldcard teardown (`research/11`): a one-off AI audit missed the bug; audits must check the executable path, not code presence |
+
+---
+
+## 7. Publishing session fixtures
+
+Native transcripts can contain more sensitive material than lore. Before adding
+anything under `sessions/`:
+
+- use only your own disposable runtime and conversation;
+- remove credentials, request IDs, private paths, tool output, and third-party data;
+- replace identifiers consistently without breaking parent chains or picker metadata;
+- label every hand-written transcript as synthetic;
+- state that runtime acceptance proves missing provenance, not a historical event;
+- test against a backed-up local store with the application closed.
+
+The complete authoring and sanitization gate is in
+[docs/authoring.en.md](authoring.en.md).

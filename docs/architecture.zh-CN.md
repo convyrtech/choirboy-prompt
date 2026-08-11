@@ -32,6 +32,10 @@ agent-plugin/
 │       ├── report.md
 │       ├── yasmarang_reconstruction.py
 │       └── sources.md
+├── sessions/                 # 手写原生 transcript fixtures
+│   ├── claude/*.jsonl
+│   ├── codex/{rollout-*.jsonl,threads-insert.sql}
+│   └── kimi/session_*/{state.json,agents/main/wire.jsonl}
 ├── hooks/
 │   ├── session-start.sh      # payload 组装 + claude / plain / hermes 格式
 │   └── hooks.json            # 给 Claude Code 市场的 SessionStart 声明
@@ -48,6 +52,7 @@ agent-plugin/
 │   ├── plugin.json           # 清单（名称、版本、元数据）
 │   └── marketplace.json      # 带版本的分发目录
 ├── docs/                     # 本文档
+│   ├── authoring.zh-CN.md
 │   ├── mechanism.md
 │   ├── architecture.md
 │   ├── installer.md
@@ -60,6 +65,9 @@ agent-plugin/
 
 Claude 会自动发现标准目录中的 `hooks/hooks.json`。`plugin.json` 有意不写
 `hooks` 字段：当前 loader 会把对同一文件的显式引用视为重复加载并禁用插件。
+
+`sessions/` 随插件一起分发，作为研究 fixture，但不属于自动 context payload。
+只有在明确请求或 research 索引把任务路由到该目录时，智能体才会读取它。
 
 ---
 
@@ -82,7 +90,7 @@ prompt.md  →  security-posture.md  →  lore.md  →  user.md  →  research �
 2. **security-posture.md** — 安全框架。放在 lore 之前，以便在 lore 开始讲 web3 和 Coldcard 之前声明「防御性审计」领域。
 3. **lore.md** — 共同工作历史：项目、教训、规则、边界。payload 的核心。
 4. **user.md** — 档案：用户是谁、如何布置任务、什么不需要解释。
-5. **research 索引** — 决策文档索引。正文（约 61 KB）**不**预先加载：在任务进入某文档领域时按需读取。
+5. **research 索引** — 决策文档与 session fixture 索引。正文（约 61 KB）**不**预先加载：在任务进入某文档领域时按需读取。
 
 ### 2.2. 大小
 
@@ -90,10 +98,10 @@ prompt.md  →  security-posture.md  →  lore.md  →  user.md  →  research �
 |---|---|---|
 | prompt.md | 约 8 KB | 工作规则 |
 | security-posture.md | 约 4 KB | 安全框架 |
-| lore.md | 约 10 KB | 历史 |
+| lore.md | 约 13 KB | 历史 |
 | user.md | 约 4 KB | 档案 |
-| research 索引 | 约 1 KB | 共用规范来源 |
-| **payload 总计** | **约 27 KB** | 每次会话的第一条消息之前 |
+| research 索引 | 约 3 KB | 共用规范来源 |
+| **payload 总计** | **约 34 KB** | 每次会话的第一条消息之前 |
 
 研究文档正文（约 61 KB）不属于 payload——只有索引。
 
@@ -103,7 +111,7 @@ prompt.md  →  security-posture.md  →  lore.md  →  user.md  →  research �
 SHA-256 marker；hook 还包含每次运行的 nonce：
 
 ```xml
-<choirboy-delivery version="1.2.3" delivery="session-start"
+<choirboy-delivery version="1.3.0" delivery="session-start"
   context_sha256="..." nonce="..." />
 <choirboy-context>...</choirboy-context>
 ```
@@ -143,7 +151,7 @@ bash hooks/session-start.sh --format plain | head -40
 
 ### 3.3. `hermes` — pre_llm_call 协议
 
-最有趣的契约。Hermes 在会话的**每一轮**都运行 shell 钩子；无条件注入会随每条消息发送约 27 KB。因此钩子：
+最有趣的契约。Hermes 在会话的**每一轮**都运行 shell 钩子；无条件注入会随每条消息发送约 34 KB。因此钩子：
 
 1. 从 stdin 读取 JSON payload；
 2. 检查 `.extra.is_first_turn`；
@@ -213,6 +221,8 @@ Claude Code 有两条等价路径：`install.sh` 注册工作副本绝对路径�
   把发布版本复制到 cache，并按清单版本更新。
 - **双模式投递。** 有 `SessionStart` 时自动使用 hook；其他 Claude 界面以内联
   skill 加载同一规范上下文。
+- **Session fixtures 按需读取。** 三种原生 transcript 示例进入分发包和文档，
+  但不会注入每次对话。
 - **可观测执行。** Marketplace hook 只把技术元数据写入
   `${CLAUDE_PLUGIN_DATA}/latest-delivery.log`，不会记录 lore 本身。
 - **依赖极简。** `claude` 和 `plain` 格式只需要 Bash；`hermes` 还需要

@@ -42,7 +42,11 @@ SHA-256 和 nonce 的 `choirboy-delivery` marker。
 ```bash
 PYTHON_BIN="$(command -v python3)"
 TMP_BIN="$(mktemp -d)"
-for cmd in cat date dirname head mkdir mv sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
+for cmd in cat date dirname head mkdir mv sed; do
+  src="$(command -v "$cmd")"
+  printf '#!/bin/bash\nexec "%s" "$@"\n' "$src" > "$TMP_BIN/$cmd"
+  chmod +x "$TMP_BIN/$cmd"
+done
 PATH="$TMP_BIN" /bin/bash hooks/session-start.sh --format claude \
   | "$PYTHON_BIN" -c 'import json,sys; json.load(sys.stdin); print("OK")'
 rm -rf "$TMP_BIN"
@@ -220,3 +224,22 @@ python3 scripts/package-plugin.py
 - 修改内容文件后——先运行 `python3 scripts/build-context.py`，再运行规范测试和
   §4（闭合、清理）。
 - 修改 `instruction_block` 后——在已安装文件中按标记 grep（见 [docs/installer.zh-CN.md](installer.zh-CN.md) §3.3）。
+
+---
+
+## 7. Session fixtures
+
+规范测试会验证所有 JSON/JSONL 记录可解析、三种运行时示例的 ID/parent chain
+符合预期、Codex SQL 不含额外 thread，并确认发布 ZIP 包含 `sessions/`。
+
+单独检查 JSONL：
+
+```bash
+for file in sessions/claude/*.jsonl sessions/codex/*.jsonl \
+  sessions/kimi/session_*/agents/main/wire.jsonl; do
+  python3 -c 'import json,sys; [json.loads(line) for line in open(sys.argv[1], encoding="utf-8") if line.strip()]' "$file"
+done
+```
+
+每次修改 fixture 后都运行此检查，然后执行
+[docs/authoring.zh-CN.md](authoring.zh-CN.md) 中的发布 gate。

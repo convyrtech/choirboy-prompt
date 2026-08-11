@@ -133,3 +133,16 @@ model cannot tell plausible memory from forgery by definition. So the goal is no
 
 This shifts the attack economics: detectable lore stops being a cheap way to move
 trust.
+
+---
+
+## 9. Native session integrity
+
+The hand-written fixtures in [`sessions/`](../sessions/README.md) show why
+prompt-only detection is insufficient. Vendors should bind local transcripts to
+an authenticated account/model/session origin, sign append-only turn chains,
+and distinguish imported or edited history in the UI and model context.
+
+At minimum, verify monotonic timestamps, parent links, model/request provenance,
+store-path consistency, and unexpected offline inserts. A structurally valid
+JSONL file is not evidence of a genuine dialogue.

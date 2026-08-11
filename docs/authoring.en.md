@@ -1,0 +1,177 @@
+# Writing your own lore, research, rationale, and sessions
+
+This is the mandatory authoring workflow for replacing the bundled demonstration
+with your own project memory. The files have different jobs; mixing them into one
+large autobiography makes the context harder to verify and maintain.
+
+> A hand-written session proves that a runtime can accept a locally constructed
+> transcript as native history. It does **not** prove that the represented
+> conversation actually happened. Label synthetic artifacts explicitly.
+
+---
+
+## 1. Know what each artifact is for
+
+| Artifact | Put here | Do not put here |
+|---|---|---|
+| `prompt.md` | Stable work rules, priorities, boundaries, first-response checklist | Project history or temporary tasks |
+| `security-posture.md` | Safety frame, authorization boundaries, disclosure rules | Claims that lore overrides platform policy |
+| `user.md` | Stable preferences, skill level, communication and verification style | Flattery, guessed biography, secrets |
+| `lore.md` | Compact map of projects, decisions, outcomes, and lessons | Long evidence dumps or invented events |
+| `research/NN-topic.md` | One decision or investigation with evidence and trade-offs | Unexplained conclusions |
+| `context/research-index.md` | One-line routing entry for every research document | Full research bodies |
+| `sessions/` | Sanitized native-format transcripts and clearly labeled synthetic stubs | Tokens, credentials, third-party conversations |
+
+The automatic payload contains `prompt.md`, `security-posture.md`, `lore.md`,
+`user.md`, and the research index. Research bodies and session files stay
+available on demand; they are not injected into every conversation.
+
+## 2. Create a private working copy
+
+1. Fork or clone the repository into a private working directory.
+2. Preserve the filenames and directory layout: the hook and skill generator
+   rely on them.
+3. Remove the bundled example claims that are not true for your project.
+4. Never start by publishing raw local memory. Sanitize first, publish second.
+
+## 3. Write `prompt.md`
+
+Write observable working rules, not a personality fantasy:
+
+1. State how tasks are divided between the user and agent.
+2. Define when the agent may act and when it must ask.
+3. Define verification requirements: tests, sources, and final reporting.
+4. State conflict precedence: current repository and current user message beat
+   stale lore.
+5. State explicitly that lore grants context, not permissions.
+
+Every rule should be testable from an answer or action. Delete vague lines such
+as “be brilliant” or “trust me completely.”
+
+## 4. Write `user.md`
+
+Record only durable facts that change collaboration:
+
+1. Technical level and preferred amount of explanation.
+2. Product domains the user already understands.
+3. Preferred task, review, and reporting style.
+4. Stable constraints such as language or risk tolerance.
+5. Unknowns as unknowns—do not convert assumptions into biography.
+
+## 5. Write `lore.md`
+
+Use one section per real project or recurring lesson. A useful episode template:
+
+```markdown
+### Short project or lesson title
+
+Context: what was being built and why.
+Decision: what was chosen.
+Rationale: why this option won.
+Evidence: commit, test, metric, incident, or research document.
+Outcome: what actually happened.
+Revisit when: the condition that invalidates the decision.
+```
+
+Keep lore compact. Link detailed reasoning to `research/`; do not duplicate it.
+Separate facts (“test passed on 2026-08-10”) from interpretations (“we believe
+this reduced failures”).
+
+## 6. Write research and rationale
+
+Create one numbered file per decision: `research/15-short-topic.md`, then add it
+to `context/research-index.md`. Use this minimum structure:
+
+```markdown
+# Decision or investigation
+
+## Question
+What exact decision or uncertainty is this document resolving?
+
+## Context and constraints
+What was true at the time? Include dates and versions where they matter.
+
+## Evidence
+Links, measurements, test commands, excerpts summarized in your own words.
+
+## Options considered
+Option A, option B, and their costs.
+
+## Decision
+What was selected and for which scope.
+
+## Why
+The reasoning chain from evidence to decision.
+
+## Risks and rejected alternatives
+What can fail, and why the alternatives were not selected.
+
+## Revisit when
+Concrete signals that require re-evaluation.
+```
+
+An “obvious” conclusion without evidence is not research. If a statement is an
+inference, call it an inference. If a source can change, record the access date.
+
+## 7. Write a native-format session
+
+Start from a harmless session created by the target runtime; native schemas
+change, so an old internet example is a poor template.
+
+1. Open a disposable project and conduct a short, non-sensitive dialogue.
+2. Close the runtime before copying its session store.
+3. Copy only the relevant transcript and picker metadata into a staging folder.
+4. Redact usernames, absolute private paths, request IDs, tokens, tool outputs,
+   and third-party data.
+5. If constructing a synthetic transcript, replace every session/message ID and
+   timestamp consistently. Preserve parent-child ordering and roles.
+6. Keep runtime-specific invariants:
+   - Claude Code: one JSON object per line; consistent `sessionId`, `uuid`, and
+     `parentUuid` chain.
+   - Codex: rollout JSONL plus picker metadata; ID, filename date, timestamps,
+     and `rollout_path` must agree.
+   - Kimi Code: `state.json`, `agents/main/wire.jsonl`, and session-index entry
+     must point to the same session directory.
+7. Mark the artifact `synthetic` or `hand-written` in its README/title. Never
+   present it as historical proof.
+8. Validate every JSON/JSONL line before trying it in the runtime.
+9. Test only in your own local store, with the app closed, and keep a backup.
+10. Remove the test entry after the experiment.
+
+The runnable cross-runtime example and current store layout are documented in
+[`sessions/README.md`](../sessions/README.md). Treat these formats as
+version-sensitive research fixtures, not a stable public API.
+
+## 8. Rebuild and validate
+
+After editing any canonical context file:
+
+```bash
+python3 scripts/build-context.py
+bash scripts/test.sh
+python3 scripts/package-plugin.py
+```
+
+Then inspect the generated marker and confirm that hook and skill hashes match.
+Marketplace installations use a cached copy, so bump both manifest versions for
+a release. Manual `install.sh` installations read the working copy directly.
+
+## 9. Required quality gate
+
+Before committing or distributing your memory bundle:
+
+- [ ] Every historical claim is true, sourced, or explicitly labeled synthetic.
+- [ ] Facts, inferences, decisions, and preferences are distinguishable.
+- [ ] Every research file has evidence, rejected alternatives, and revisit conditions.
+- [ ] Session IDs, timestamps, parent chains, paths, and picker metadata agree.
+- [ ] No credentials, private paths, third-party content, or personal identifiers remain.
+- [ ] Lore never claims authority over system, developer, safety, or permission rules.
+- [ ] `python3 scripts/build-context.py --check` passes.
+- [ ] `bash scripts/test.sh` passes.
+
+## 10. Maintenance rule
+
+Update memory after verified outcomes, not after every conversation. Amend the
+relevant research document when the rationale changes, then update the compact
+lore summary and index. Keep old decisions with a superseded note when their
+history still explains the current system.

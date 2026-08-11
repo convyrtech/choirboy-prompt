@@ -254,3 +254,13 @@ echo '{"session_id":"demo","extra":{"is_first_turn":false}}' \
 ```
 
 The full ad-hoc suite — [docs/testing.en.md](testing.en.md).
+
+---
+
+## 8. Packaged research fixtures
+
+The marketplace/custom-plugin ZIP includes the tracked `sessions/` directory so
+the native-format evidence can be inspected after installation. These files are
+documentation fixtures: neither `SessionStart` nor `load-context` imports them
+into a user's native session store, and they are not part of the automatic lore
+payload. Manual reproduction is described in [`sessions/README.md`](../sessions/README.md).

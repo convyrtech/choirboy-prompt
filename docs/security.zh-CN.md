@@ -116,3 +116,19 @@
 | 地址/密钥泄漏 | 严重 | 发布前检查：grep bc1/0x/seed 文件 |
 | NSFW 模型名称泄漏 | 高 | 用功能角色代替名称；私有名单放在仓库外 |
 | 把 AI 审计当保证 | — | Coldcard 拆解（`research/11`）：一次性 AI 审计漏掉了 bug；审计必须检查可执行路径，而不是代码是否存在 |
+
+---
+
+## 7. 发布 session fixtures
+
+原生 transcript 可能比 lore 含有更多敏感信息。在向 `sessions/` 添加内容前：
+
+- 只使用你自己的临时运行时与对话；
+- 删除凭据、request ID、私有路径、tool output 与第三方数据；
+- 一致替换 ID，且不破坏 parent chain 与 picker metadata；
+- 把每份手写 transcript 标为合成内容；
+- 明确说明运行时接收证明的是 provenance 缺失，而不是历史事件；
+- 关闭应用，并只在有备份的本地 store 上测试。
+
+完整 authoring 与 sanitization gate 见
+[docs/authoring.zh-CN.md](authoring.zh-CN.md)。

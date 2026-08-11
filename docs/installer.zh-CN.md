@@ -223,3 +223,12 @@ echo '{"session_id":"demo","extra":{"is_first_turn":false}}' \
 ```
 
 完整的临时测试套件——[docs/testing.zh-CN.md](testing.zh-CN.md)。
+
+---
+
+## 8. 分发包中的研究 fixtures
+
+Marketplace/custom-plugin ZIP 包含已跟踪的 `sessions/` 目录，便于安装后检查
+原生格式证据。这些文件只是文档 fixtures：`SessionStart` 与 `load-context` 都
+不会把它们导入用户的原生 session store，它们也不属于自动 lore payload。
+手动复现见 [`sessions/README.zh-CN.md`](../sessions/README.zh-CN.md)。

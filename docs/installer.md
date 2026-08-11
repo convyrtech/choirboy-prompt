@@ -255,3 +255,14 @@ echo '{"session_id":"demo","extra":{"is_first_turn":false}}' \
 ```
 
 Полный ad-hoc сьют — `docs/testing.md`.
+
+---
+
+## 8. Исследовательские fixtures в пакете
+
+Marketplace/custom-plugin ZIP включает tracked-папку `sessions/`, чтобы
+нативные доказательные артефакты можно было изучить после установки. Это
+документация: ни `SessionStart`, ни `load-context` не импортируют файлы в
+нативный session store пользователя, и в автоматический lore payload они не
+входят. Ручное воспроизведение описано в
+[`sessions/README.ru.md`](../sessions/README.ru.md).

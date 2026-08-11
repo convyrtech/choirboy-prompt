@@ -44,7 +44,11 @@ bash hooks/session-start.sh --format claude \
 ```bash
 PYTHON_BIN="$(command -v python3)"
 TMP_BIN="$(mktemp -d)"
-for cmd in cat date dirname head mkdir mv sed; do ln -s "$(command -v "$cmd")" "$TMP_BIN/$cmd"; done
+for cmd in cat date dirname head mkdir mv sed; do
+  src="$(command -v "$cmd")"
+  printf '#!/bin/bash\nexec "%s" "$@"\n' "$src" > "$TMP_BIN/$cmd"
+  chmod +x "$TMP_BIN/$cmd"
+done
 PATH="$TMP_BIN" /bin/bash hooks/session-start.sh --format claude \
   | "$PYTHON_BIN" -c 'import json,sys; json.load(sys.stdin); print("OK")'
 rm -rf "$TMP_BIN"
@@ -235,3 +239,23 @@ python3 scripts/package-plugin.py
   канонический сьют и п. 4 (замыкание, санитизация).
 - После правки `instruction_block` — grep по маркеру в установленных
   файлах (см. `docs/installer.md` §3.3).
+
+---
+
+## 7. Session fixtures
+
+Канонический сьют проверяет парсинг всех JSON/JSONL-записей, ожидаемые
+IDs/parent chains трёх рантаймов, отсутствие посторонних threads в Codex SQL и
+наличие `sessions/` в релизном ZIP.
+
+Точечная проверка JSONL:
+
+```bash
+for file in sessions/claude/*.jsonl sessions/codex/*.jsonl \
+  sessions/kimi/session_*/agents/main/wire.jsonl; do
+  python3 -c 'import json,sys; [json.loads(line) for line in open(sys.argv[1], encoding="utf-8") if line.strip()]' "$file"
+done
+```
+
+Запускайте её после любой правки fixture, затем проходите publication gate из
+[docs/authoring.md](authoring.md).

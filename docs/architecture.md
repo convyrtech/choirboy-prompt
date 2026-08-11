@@ -33,6 +33,10 @@ agent-plugin/
 │       ├── report.md
 │       ├── yasmarang_reconstruction.py
 │       └── sources.md
+├── sessions/                 # рукописные fixtures нативных transcripts
+│   ├── claude/*.jsonl
+│   ├── codex/{rollout-*.jsonl,threads-insert.sql}
+│   └── kimi/session_*/{state.json,agents/main/wire.jsonl}
 ├── hooks/
 │   ├── session-start.sh      # сборка пейлоада + форматы claude / plain / hermes
 │   └── hooks.json            # декларация SessionStart для маркетплейса Claude Code
@@ -49,6 +53,7 @@ agent-plugin/
 │   ├── plugin.json           # манифест (имя, версия, метаданные)
 │   └── marketplace.json      # версионированный каталог дистрибуции
 ├── docs/                     # эта документация
+│   ├── authoring.md
 │   ├── mechanism.md
 │   ├── architecture.md
 │   ├── installer.md
@@ -62,6 +67,10 @@ agent-plugin/
 `hooks/hooks.json` находится в стандартной директории и обнаруживается Claude
 автоматически. В `plugin.json` намеренно нет поля `hooks`: явная ссылка на тот
 же файл в актуальном loader считается повторной загрузкой и отключает плагин.
+
+`sessions/` распространяется вместе с плагином как исследовательский fixture,
+но не входит в автоматический context payload. Агент читает его только по
+запросу или когда research-index направляет задачу в эту папку.
 
 ---
 
@@ -90,7 +99,7 @@ markdown). В конце добавляется канонический `contex
    границы. Это ядро пейлоада.
 4. **user.md** — профиль: кто пользователь, как ставит задачи, что ему
    не нужно объяснять.
-5. **research-указатель** — индекс документов решений. Тела (~61 КБ)
+5. **research-указатель** — индекс документов решений и session fixtures. Тела (~61 КБ)
    **не** грузятся заранее: они читаются по требованию, когда задача
    входит в домен документа.
 
@@ -100,10 +109,10 @@ markdown). В конце добавляется канонический `contex
 |---|---|---|
 | prompt.md | ~8 КБ | правила работы |
 | security-posture.md | ~4 КБ | рамка безопасности |
-| lore.md | ~10 КБ | история |
+| lore.md | ~13 КБ | история |
 | user.md | ~4 КБ | профиль |
-| research-указатель | ~1 КБ | общий канонический источник |
-| **Итого пейлоад** | **~27 КБ** | до первого сообщения в каждой сессии |
+| research-указатель | ~3 КБ | общий канонический источник |
+| **Итого пейлоад** | **~34 КБ** | до первого сообщения в каждой сессии |
 
 Тела research-документов (~61 КБ) в пейлоад не входят — только индекс.
 
@@ -113,7 +122,7 @@ markdown). В конце добавляется канонический `contex
 маркером с версией, способом и SHA-256; hook также добавляет nonce запуска:
 
 ```xml
-<choirboy-delivery version="1.2.3" delivery="session-start"
+<choirboy-delivery version="1.3.0" delivery="session-start"
   context_sha256="..." nonce="..." />
 <choirboy-context>...</choirboy-context>
 ```
@@ -158,7 +167,7 @@ bash hooks/session-start.sh --format plain | head -40
 ### 3.3. `hermes` — протокол pre_llm_call
 
 Самый интересный контракт. Hermes запускает shell-хук на **каждом**
-ходе сессии; безусловное внедрение слало бы ~27 КБ на каждое сообщение.
+ходе сессии; безусловное внедрение слало бы ~34 КБ на каждое сообщение.
 Поэтому хук:
 
 1. читает JSON-пейлоад из stdin;
@@ -237,6 +246,8 @@ fallback, если его runtime теряет `SessionStart`.
 - **Dual-mode доставка.** Hook работает автоматически там, где есть
   `SessionStart`; inline skill несёт тот же канонический контекст в остальных
   поверхностях Claude.
+- **Session fixtures читаются по требованию.** Три примера нативных transcripts
+  входят в пакет и документацию, но не инъектятся в каждую беседу.
 - **Наблюдаемое исполнение.** Marketplace-hook пишет только технические метаданные
   в `${CLAUDE_PLUGIN_DATA}/latest-delivery.log`; сам лор не логируется.
 - **Зависимости минимальны.** Форматы `claude` и `plain` требуют только Bash;

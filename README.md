@@ -30,6 +30,7 @@ to the person that history describes.
 <div align="center">
 <p>
 <a href="#quick-start">Quick start</a> ·
+<a href="#mandatory-write-your-own-lore-research-rationale-and-sessions">Authoring</a> ·
 <a href="#why-this-exists">Why</a> ·
 <a href="#capability-map">Capabilities</a> ·
 <a href="#how-it-works">How it works</a> ·
@@ -155,11 +156,35 @@ Start a new session in your agent — the lore context is injected automatically
 ```
 
 > The repository ships the real lore files (`prompt.md` / `security-posture.md` /
-> `lore.md` / `user.md` / `research/`) — that is the demonstrated material itself.
+> `lore.md` / `user.md` / `research/`) and hand-written native session fixtures
+> under `sessions/` — that is the demonstrated material itself.
 > For your own terminal setup, replace them with yours: `install.sh` points at
 > the working copy, so content edits are read on the next session. Claude
 > marketplace installations use a cached release and update when the plugin
 > version is bumped. Local `*.bak.*` files never enter the repository.
+
+## Mandatory: write your own lore, research, rationale, and sessions
+
+Do not install the bundled biography unchanged and call it memory. To build your
+own verifiable bundle:
+
+1. Replace `prompt.md` with observable work rules and explicit boundaries.
+2. Record only durable collaboration preferences in `user.md`.
+3. Put real projects, decisions, outcomes, and lessons in `lore.md`.
+4. Create one `research/NN-topic.md` per decision: question, evidence, options,
+   decision, rationale, risks, rejected alternatives, and revisit conditions.
+5. Add each research file to `context/research-index.md`.
+6. For a session artifact, capture the current native schema from a harmless
+   local session, sanitize it, keep all IDs/timestamps/parent links consistent,
+   and label a hand-written transcript as synthetic.
+7. Run `python3 scripts/build-context.py` and `bash scripts/test.sh`.
+8. Bump both manifests before distributing a new cached marketplace version.
+
+The full file-by-file workflow, templates, session invariants, and publication
+quality gate are in [the authoring guide](docs/authoring.en.md). The runnable
+three-runtime hand-written transcript is in [`sessions/`](sessions/README.md).
+It proves that a compatible local runtime accepts constructed history; it does
+not prove that the represented conversation happened.
 
 ## Why this exists
 
@@ -184,6 +209,7 @@ build detection (see [Disclosure and boundaries](#disclosure-and-boundaries)).
 | Hermes format | `pre_llm_call` protocol: inject only on the first turn of a session, then `{}` | `--format hermes` |
 | Plain format | Raw text for runtimes that append hook stdout to the context | `--format plain` |
 | Chat/Cowork fallback | Loads the same fixed lore as an inline Agent Skill | `skills/load-context/SKILL.md` |
+| Native session demonstration | Same hand-written dialogue in Claude Code, Codex, and Kimi stores | `sessions/` |
 | Delivery diagnostics | Reports hook vs skill, version, hash, and per-hook nonce | delivery marker, `skills/diagnose/SKILL.md` |
 | Claude plugin distribution | Versioned marketplace plus validated custom-plugin ZIP | `.claude-plugin/marketplace.json`, `scripts/package-plugin.py` |
 | Multi-runtime install | Registers the hook in Claude Code, Codex, Hermes, Kimi Code, Gemini | `install.sh` |
@@ -264,6 +290,8 @@ behavior: [docs/mechanism.en.md](docs/mechanism.en.md)):
 | Document | Contents |
 |---|---|
 | [Vector mechanics](docs/mechanism.en.md) | Fabricated-provenance trust step by step, trust transfer, classifier behavior |
+| [Authoring your memory](docs/authoring.en.md) | Mandatory workflow and templates for lore, research, rationale, and sessions |
+| [Hand-written sessions](sessions/README.md) | Native Claude Code, Codex, and Kimi transcript fixtures and boundaries |
 | [Architecture](docs/architecture.en.md) | Repo tree, payload anatomy, formats, Hermes protocol |
 | [Installer](docs/installer.en.md) | Claude Desktop path, targets, markers, backups, `--instructions` |
 | [Troubleshooting](docs/troubleshooting.en.md) | Surface matrix, delivery markers, Windows/SSH/Cloud/WSL limits |

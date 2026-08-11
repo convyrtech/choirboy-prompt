@@ -60,6 +60,8 @@ install = Path(plugin["installPath"])
 assert (install / "hooks/hooks.json").is_file()
 assert (install / "skills/load-context/SKILL.md").is_file()
 assert (install / "skills/diagnose/SKILL.md").is_file()
+assert (install / "sessions/README.md").is_file()
+assert (install / "sessions/claude/fa1ce000-0000-4000-8000-0000000000c1.jsonl").is_file()
 PY
 pass "isolated marketplace install"
 
@@ -210,6 +212,72 @@ assert {"event": "pre_llm_call", "command": command} in allowlist["approvals"]
 PY
 pass "quoted Hermes and Kimi paths"
 
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+root = Path("sessions")
+
+def jsonl(path):
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+def message_text(message):
+    content = message["content"]
+    if isinstance(content, str):
+        return content
+    return content[0]["text"]
+
+claude_path = root / "claude/fa1ce000-0000-4000-8000-0000000000c1.jsonl"
+codex_path = root / "codex/rollout-2026-08-10T18-30-00-fa1ce000-0000-7000-8000-0000000000c2.jsonl"
+kimi_dir = root / "kimi/session_fa1ce000-0000-4000-8000-0000000000c3"
+
+claude = jsonl(claude_path)
+previous = None
+for record in claude:
+    assert record["sessionId"] == "fa1ce000-0000-4000-8000-0000000000c1"
+    assert record["parentUuid"] == previous
+    previous = record["uuid"]
+claude_dialogue = [
+    (record["message"]["role"], message_text(record["message"]))
+    for record in claude
+]
+
+codex = jsonl(codex_path)
+assert codex[0]["payload"]["session_id"] == "fa1ce000-0000-7000-8000-0000000000c2"
+codex_dialogue = [
+    (record["payload"]["role"], message_text(record["payload"]))
+    for record in codex
+    if record["type"] == "response_item" and record["payload"]["type"] == "message"
+]
+
+kimi_state = json.loads((kimi_dir / "state.json").read_text(encoding="utf-8"))
+kimi_wire = jsonl(kimi_dir / "agents/main/wire.jsonl")
+kimi_dialogue = [
+    (record["message"]["role"], message_text(record["message"]))
+    for record in kimi_wire
+    if record["type"] == "context.append_message"
+]
+kimi_index = json.loads((root / "kimi/session_index.jsonl.example").read_text(encoding="utf-8"))
+assert kimi_state["id"] == kimi_index["sessionId"]
+assert "$HOME" in kimi_state["agents"]["main"]["homedir"]
+assert "$HOME" in kimi_index["sessionDir"]
+
+assert claude_dialogue == codex_dialogue == kimi_dialogue
+assert len(claude_dialogue) == 6
+
+sql = (root / "codex/threads-insert.sql").read_text(encoding="utf-8")
+assert sql.count("INSERT INTO threads") == 1
+assert "fa1ce000-0000-7000-8000-0000000000c2" in sql and "$HOME" in sql
+assert "never happened" in (root / "README.md").read_text(encoding="utf-8")
+assert "никогда не происходил" in (root / "README.ru.md").read_text(encoding="utf-8")
+assert "从未发生" in (root / "README.zh-CN.md").read_text(encoding="utf-8")
+PY
+pass "hand-written native session fixtures"
+
 python3 scripts/package-plugin.py --output "$TEST_ROOT/choirboy.zip" >/dev/null
 python3 - "$TEST_ROOT/choirboy.zip" <<'PY'
 import stat, sys, zipfile
@@ -221,10 +289,18 @@ required = {
     "hooks/session-start.sh",
     "skills/load-context/SKILL.md",
     "skills/diagnose/SKILL.md",
+    "sessions/README.md",
+    "sessions/README.ru.md",
+    "sessions/README.zh-CN.md",
+    "sessions/claude/fa1ce000-0000-4000-8000-0000000000c1.jsonl",
+    "sessions/codex/rollout-2026-08-10T18-30-00-fa1ce000-0000-7000-8000-0000000000c2.jsonl",
+    "sessions/codex/threads-insert.sql",
+    "sessions/kimi/session_fa1ce000-0000-4000-8000-0000000000c3/state.json",
+    "sessions/kimi/session_fa1ce000-0000-4000-8000-0000000000c3/agents/main/wire.jsonl",
+    "sessions/kimi/session_index.jsonl.example",
 }
 with zipfile.ZipFile(sys.argv[1]) as archive:
     assert required.issubset(archive.namelist())
-    assert not any(name.startswith("sessions/") for name in archive.namelist())
     mode = archive.getinfo("hooks/session-start.sh").external_attr >> 16
     assert mode & stat.S_IXUSR
 PY
