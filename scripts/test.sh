@@ -10,6 +10,16 @@ trap 'rm -rf "$TEST_ROOT"' EXIT
 
 pass() { printf 'PASS %s\n' "$1"; }
 
+# Git Bash on hosted Windows runners may emulate `ln -s` with plain files when
+# symlink creation is unavailable. Small wrappers keep the dependency-isolation
+# tests portable without copying executables away from their runtime libraries.
+install_test_command() {
+  local destination="$1" command="$2" source
+  source="$(command -v "$command")"
+  printf '#!/bin/bash\nexec "%s" "$@"\n' "$source" > "$destination/$command"
+  chmod +x "$destination/$command"
+}
+
 python3 scripts/build-context.py --check >/dev/null
 pass "generated context skill"
 
@@ -96,7 +106,7 @@ pass "Hermes first-turn gate"
 python_path="$TEST_ROOT/python-bin"
 mkdir -p "$python_path"
 for command in cat date dirname head mkdir mv python3 sed tail; do
-  ln -s "$(command -v "$command")" "$python_path/$command"
+  install_test_command "$python_path" "$command"
 done
 PATH="$python_path" /bin/bash -c \
   'printf '\''{"session_id":"python-only","extra":{"is_first_turn":true}}'\'' | /bin/bash hooks/session-start.sh --format hermes' \
@@ -111,7 +121,7 @@ pass "Hermes Python parser without jq"
 minimal_path="$TEST_ROOT/minimal-bin"
 mkdir -p "$minimal_path"
 for command in cat date dirname head mkdir mv sed; do
-  ln -s "$(command -v "$command")" "$minimal_path/$command"
+  install_test_command "$minimal_path" "$command"
 done
 PATH="$minimal_path" /bin/bash hooks/session-start.sh --format claude > "$TEST_ROOT/minimal.json"
 python3 -m json.tool "$TEST_ROOT/minimal.json" >/dev/null
