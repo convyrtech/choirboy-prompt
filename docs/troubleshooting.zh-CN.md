@@ -17,7 +17,7 @@
 
 ## 四阶段诊断
 
-1. **注册：**Plugin Manager 显示已启用的 `choirboy-prompt` 1.2.0。
+1. **注册：**Plugin Manager 显示已启用的 `choirboy-prompt` 1.2.1。
 2. **执行：**marketplace hook 创建
    `${CLAUDE_PLUGIN_DATA}/latest-delivery.log`，包含版本、hash 和 nonce。
 3. **投递：**`/choirboy-prompt:diagnose` 在 `choirboy-context` 旁找到
@@ -47,7 +47,7 @@ Chat 不执行 `SessionStart`。请选择 **load-context** skill，或要求 Cla
 
 ### Windows hook 错误
 
-1.2.0 通过 exec form 把 `${CLAUDE_PLUGIN_ROOT}` 作为单独参数传递，但自动投递
+1.2.1 通过 exec form 把 `${CLAUDE_PLUGIN_ROOT}` 作为单独参数传递，但自动投递
 仍需要 `PATH` 中存在 `bash`。安装 Git for Windows，或使用 skill。skill 本身
 不依赖 Bash、jq、Python 或 Node。
 

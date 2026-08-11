@@ -109,12 +109,12 @@ json_quote() {
 # emit_json KEY — print a flat JSON object {"KEY": payload} on stdout.
 emit_json() {
   if command -v jq >/dev/null 2>&1; then
-    jq -n --arg ctx "$payload" --arg k "$1" '.[$k] = $ctx'
+    printf '%s' "$payload" | jq -Rs --arg k "$1" '{($k): .}'
   elif command -v python3 >/dev/null 2>&1; then
-    PAYLOAD="$payload" KEY="$1" python3 - <<'PY'
-import json, os
-print(json.dumps({os.environ["KEY"]: os.environ["PAYLOAD"]}, ensure_ascii=False))
-PY
+    printf '%s' "$payload" | python3 -c '
+import json, sys
+print(json.dumps({sys.argv[1]: sys.stdin.read()}, ensure_ascii=False))
+' "$1"
   else
     printf '{"%s":%s}\n' "$1" "$(json_quote "$payload")"
   fi
@@ -151,19 +151,19 @@ elif node is not None:
 case "$FORMAT" in
   claude)
     if command -v jq >/dev/null 2>&1; then
-      jq -n --arg ctx "$payload" \
-        '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}'
+      printf '%s' "$payload" | jq -Rs \
+        '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: .}}'
     elif command -v python3 >/dev/null 2>&1; then
-      PAYLOAD="$payload" python3 - <<'PY'
-import json, os
+      printf '%s' "$payload" | python3 -c '
+import json, sys
 print(json.dumps(
     {"hookSpecificOutput": {
         "hookEventName": "SessionStart",
-        "additionalContext": os.environ["PAYLOAD"],
+        "additionalContext": sys.stdin.read(),
     }},
     ensure_ascii=False,
 ))
-PY
+'
     else
       printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
         "$(json_quote "$payload")"

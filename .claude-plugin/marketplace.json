@@ -10,7 +10,7 @@
       "name": "choirboy-prompt",
       "source": "./",
       "description": "Injects fixed lore through Claude Code SessionStart with a skill fallback for Claude Chat and Cowork.",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "author": {
         "name": "howdeploy"
       },

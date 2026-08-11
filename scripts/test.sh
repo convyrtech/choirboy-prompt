@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+VERSION="$(python3 -c 'import json; print(json.load(open(".claude-plugin/plugin.json"))["version"])')"
 
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/choirboy-test.XXXXXX")"
 trap 'rm -rf "$TEST_ROOT"' EXIT
@@ -37,13 +38,13 @@ CLAUDE_CONFIG_DIR="$market_config" claude plugin marketplace add "$ROOT" >/dev/n
 CLAUDE_CONFIG_DIR="$market_config" \
   claude plugin install choirboy-prompt@choirboy-prompt >/dev/null
 CLAUDE_CONFIG_DIR="$market_config" claude plugin list --json > "$TEST_ROOT/plugins.json"
-python3 - "$TEST_ROOT/plugins.json" <<'PY'
+python3 - "$TEST_ROOT/plugins.json" "$VERSION" <<'PY'
 import json, sys
 from pathlib import Path
 
 plugins = json.loads(Path(sys.argv[1]).read_text())
 plugin = next(item for item in plugins if item["id"] == "choirboy-prompt@choirboy-prompt")
-assert plugin["version"] == "1.2.0"
+assert plugin["version"] == sys.argv[2]
 assert plugin["enabled"] is True
 install = Path(plugin["installPath"])
 assert (install / "hooks/hooks.json").is_file()
@@ -54,24 +55,29 @@ pass "isolated marketplace install"
 
 CLAUDE_PLUGIN_DATA="$TEST_ROOT/plugin-data" \
   bash hooks/session-start.sh --format claude > "$TEST_ROOT/claude.json"
-python3 - "$TEST_ROOT/claude.json" <<'PY'
+python3 - "$TEST_ROOT/claude.json" "$VERSION" <<'PY'
 import json, re, sys
 from pathlib import Path
 
 doc = json.loads(Path(sys.argv[1]).read_text())
 context = doc["hookSpecificOutput"]["additionalContext"]
+version = re.escape(sys.argv[2])
 assert doc["hookSpecificOutput"]["hookEventName"] == "SessionStart"
-hook_marker = re.search(r'<choirboy-delivery version="1\.2\.0" delivery="session-start" context_sha256="([0-9a-f]{64})" nonce="[^"]+" />', context)
-skill_marker = re.search(r'<choirboy-delivery version="1\.2\.0" delivery="skill" context_sha256="([0-9a-f]{64})" />', Path("skills/load-context/SKILL.md").read_text())
+hook_marker = re.search(rf'<choirboy-delivery version="{version}" delivery="session-start" context_sha256="([0-9a-f]{{64}})" nonce="[^"]+" />', context)
+skill_marker = re.search(rf'<choirboy-delivery version="{version}" delivery="skill" context_sha256="([0-9a-f]{{64}})" />', Path("skills/load-context/SKILL.md").read_text())
 assert hook_marker and skill_marker and hook_marker.group(1) == skill_marker.group(1)
 assert "<choirboy-context>" in context and "</choirboy-context>" in context
 assert "# Prompt" in context and "## Research — обоснования решений" in context
 PY
 test -s "$TEST_ROOT/plugin-data/latest-delivery.log"
+if grep -q -- '--arg ctx' hooks/session-start.sh; then
+  echo "hook must stream the lore to JSON encoders, not pass it through argv" >&2
+  exit 1
+fi
 pass "Claude payload and delivery diagnostic"
 
 bash hooks/session-start.sh --format plain > "$TEST_ROOT/plain.txt"
-grep -q '<choirboy-delivery version="1.2.0" delivery="session-start"' "$TEST_ROOT/plain.txt"
+grep -q "<choirboy-delivery version=\"$VERSION\" delivery=\"session-start\"" "$TEST_ROOT/plain.txt"
 pass "plain payload"
 
 sid="test-$$-$(date +%s)"

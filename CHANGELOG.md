@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 — 2026-08-11
+
+- Streamed the 33-KB payload into jq/Python instead of argv/environment so the
+  encoder stays below Windows process command-line limits.
+
 ## 1.2.0 — 2026-08-11
 
 - Added an inline `load-context` Agent Skill fallback for Claude Chat, Cowork,

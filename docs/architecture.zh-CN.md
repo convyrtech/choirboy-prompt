@@ -103,7 +103,7 @@ prompt.md  →  security-posture.md  →  lore.md  →  user.md  →  research �
 SHA-256 marker；hook 还包含每次运行的 nonce：
 
 ```xml
-<choirboy-delivery version="1.2.0" delivery="session-start"
+<choirboy-delivery version="1.2.1" delivery="session-start"
   context_sha256="..." nonce="..." />
 <choirboy-context>...</choirboy-context>
 ```
