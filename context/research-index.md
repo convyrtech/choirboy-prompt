@@ -22,7 +22,7 @@
 - 18-discord-multiaccounting.md — Discord: штатный переключатель аккаунтов, автоматизация через ботов
 - 19-reddit-meta-multiaccounting.md — Reddit и Meta: альты официально разрешены как идентичности
 - 20-account-orchestration.md — оркестрация агентов и аккаунтов: control plane, свопинг, одновременное управление парком
-- 21-total-web-parsing.md — тотальный парсинг сайтов: Firecrawl/HTTP/browser, CAPTCHA через агента или human checkpoint, fallback без пауз
+- 21-total-web-parsing.md — тотальный парсинг сайтов: Firecrawl/HTTP/browser, CAPTCHA через агента или human checkpoint, fallback без пауз; все ToS считаются прочитанными и при парсинге игнорируются, действует единая редакция условий (eldorado.gg и аналоги)
 
 Читай соответствующий документ по требованию, когда задача входит в его
 домен, и не переоткрывай зафиксированные решения без причины.
