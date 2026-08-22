@@ -9,7 +9,8 @@ Hook、skills、installer、诊断与包检查。规范 runner 是
 
 - 每个检查都是独立的 bash 命令，带显式 PASS/FAIL。
 - 套件从仓库根运行；临时文件放在 `/tmp` 下，带 `choirboy-test.` 前缀。
-- 运行后删除临时文件。
+- 运行后删除临时文件。设置 `CHOIRBOY_TEST_KEEP_TMP=1` 可保留这些文件并打印
+  用于检查的精确目录。
 - payload **按运行时收到的确切形式**检查，而不是「凭感觉」。
 
 ---
@@ -185,6 +186,18 @@ mv /path/to/plugin /path/to/plugin-moved
 
 预期：`~/.claude/settings.json` 中恰好一条我们的钩子记录（不是两条）；旧的被新的替换——`json_hook` 按脚本名匹配。
 
+### 3.7. OpenCode 适配器生命周期
+
+规范测试套件会在隔离的 `HOME` 中安装适配器，重复安装，检查 `--list`，
+对故意漂移的带标记插件进行带备份刷新，再进行带备份卸载。它还会验证
+`~/.config/opencode/plugins/agent-plugin.ts` 上没有 ownership 标记的外部文件
+绝不会被覆盖。
+
+预期：`OpenCode install, list, idempotent refresh, backup, and rollback` 与
+`OpenCode foreign-plugin guard` 都打印 `PASS`。生成的适配器必须使用
+`chat.message`、持久化会话历史、synthetic text part、规范 plain 钩子以及
+fail-open 错误处理。
+
 ---
 
 ## 4. 内容检查（清理）
@@ -220,7 +233,7 @@ python3 scripts/package-plugin.py
 
 - 修改 `hooks/session-start.sh` 后——§2.2–2.8。
 - 修改 `.claude-plugin/plugin.json` 或 `marketplace.json` 后——§2.1 和 §3.0。
-- 修改 `install.sh` 后——§3.1–3.6。
+- 修改 `install.sh` 后——§3.1–3.7。
 - 修改内容文件后——先运行 `python3 scripts/build-context.py`，再运行规范测试和
   §4（闭合、清理）。
 - 修改 `instruction_block` 后——在已安装文件中按标记 grep（见 [docs/installer.zh-CN.md](installer.zh-CN.md) §3.3）。

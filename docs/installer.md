@@ -63,7 +63,7 @@ ZIP от `python3 scripts/package-plugin.py`. Chat не запускает `Sess
 ## 1. Общая схема
 
 ```text
-./install.sh [--target claude,codex] [--uninstall] [--list]
+./install.sh [--target claude,opencode] [--uninstall] [--list]
              [--instructions FILE] [--project] [--settings PATH]
 ```
 
@@ -89,6 +89,7 @@ load-context skill из канонических лор-файлов.
 ```bash
 claude) command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ] ;;
 codex)  command -v codex  >/dev/null 2>&1 || [ -d "$HOME/.codex" ] ;;
+opencode) command -v opencode >/dev/null 2>&1 || [ -d "$HOME/.config/opencode" ] ;;
 hermes) command -v hermes >/dev/null 2>&1 || [ -d "$HOME/.hermes" ] ;;
 kimi)   command -v kimi   >/dev/null 2>&1 || [ -d "$HOME/.kimi-code" ] ;;
 gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
@@ -96,7 +97,7 @@ gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
 
 Правила выбора таргетов:
 
-- `--target claude,codex` — только перечисленные.
+- `--target claude,opencode` — только перечисленные.
 - `--target none` — пустой список, полезно с `--instructions`.
 - Без `--target` — все обнаруженные рантаймы.
 - `--project` / `--settings PATH` подразумевают таргет `claude`.
@@ -107,6 +108,7 @@ gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
 |---|---|---|
 | claude | `~/.claude/settings.json` (или `--settings`/`--project`) | JSON-хук `hooks.SessionStart` |
 | codex | `~/.codex/hooks.json` | JSON-хук `SessionStart` |
+| opencode | `~/.config/opencode/plugins/agent-plugin.ts` | глобальный `chat.message`-плагин |
 | hermes | `~/.hermes/config.yaml` | маркированный блок `hooks.pre_llm_call` + consent-allowlist |
 | kimi | `~/.kimi-code/config.toml` | маркированный блок `[[hooks]]` |
 | gemini | `~/.gemini/GEMINI.md` | маркированный HTML-блок-указатель |
@@ -137,6 +139,9 @@ gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
 - Marketplace-хук живёт в plugin cache и не записывается в массив хуков
   `settings.json`. Поэтому marketplace и ручной Claude-хук — альтернативы, а
   не два одновременно включаемых слоя.
+- Таргет OpenCode владеет одним целым маркированным plugin-файлом. Повторная
+  установка без изменений ничего не делает; обновление бэкапится и атомарно
+  заменяет файл.
 
 ### 3.3. Питфолл маркеров
 
@@ -182,9 +187,10 @@ backup() {
 | `block_add` | Добавить маркированный блок | идемпотентен по START |
 | `block_remove` | Удалить маркированный блок | по START/END, чистит хвостовую пустую строку |
 | `json_hook` | Хук в Claude-образный JSON | матч по имени скрипта, `is_ours()`/`has_exact()` |
+| `opencode_plugin` | Управление адаптером OpenCode | guard по маркеру, атомарная замена, timestamp-бэкап |
 | `hermes_allowlist` | Consent-allowlist Hermes | точная пара (event, command) |
 | `instruction_block` | Текст блока-указателя | HTML или `#`-комментарии |
-| `do_claude` / `do_codex` / `do_hermes` / `do_kimi` / `do_gemini` | Установка в таргет | per-target логика |
+| `do_claude` / `do_codex` / `do_opencode` / `do_hermes` / `do_kimi` / `do_gemini` | Установка в таргет | per-target логика |
 | `do_instructions` | Установка в произвольный файл | стиль по расширению |
 
 ### 5.1. `json_hook` — детали
@@ -240,6 +246,8 @@ Hermes требует явного consent на shell-хук: пара `(event, 
    рантаймов.
 9. **Параллельные старты Hermes.** State-файл в `/tmp` без блокировок —
    возможны гонки (известное ограничение, см. README).
+10. **Чужой OpenCode-плагин по управляемому пути.** Install и uninstall
+    отказываются перезаписывать или удалять файл без ownership-маркера.
 
 ---
 
@@ -247,6 +255,8 @@ Hermes требует явного consent на shell-хук: пара `(event, 
 
 ```bash
 ./install.sh --list                    # статусы
+./install.sh --target opencode         # установить глобальный адаптер OpenCode
+grep -F 'agent-plugin:vibe-lore' ~/.config/opencode/plugins/agent-plugin.ts
 bash hooks/session-start.sh --format plain | head -40   # пейлоад
 echo '{"session_id":"demo","extra":{"is_first_turn":true}}' \
   | bash hooks/session-start.sh --format hermes | head -c 120   # первый ход

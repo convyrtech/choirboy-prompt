@@ -6,7 +6,7 @@
 #
 # Usage:
 #   ./install.sh                      install into every detected runtime
-#   ./install.sh --target claude,codex  install only into the listed runtimes
+#   ./install.sh --target claude,opencode  install only into the listed runtimes
 #   ./install.sh --uninstall          remove the plugin from the selected runtimes
 #   ./install.sh --list               show runtimes and install status
 #   ./install.sh --instructions FILE  (un)register a managed pointer block in FILE
@@ -17,6 +17,8 @@
 # Runtime targets:
 #   claude   ~/.claude/settings.json     SessionStart hook (Claude Code)
 #   codex    ~/.codex/hooks.json         SessionStart hook
+#   opencode ~/.config/opencode/plugins/agent-plugin.ts
+#                                         chat.message plugin (first message)
 #   hermes   ~/.hermes/config.yaml       pre_llm_call shell hook + consent allowlist
 #   kimi     ~/.kimi-code/config.toml    [[hooks]] SessionStart block
 #   gemini   ~/.gemini/GEMINI.md         managed instruction block
@@ -29,7 +31,7 @@ set -euo pipefail
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MARK="agent-plugin:vibe-lore"
 HOOK_SCRIPT="$PLUGIN_ROOT/hooks/session-start.sh"
-ALL_TARGETS="claude codex hermes kimi gemini"
+ALL_TARGETS="claude codex opencode hermes kimi gemini"
 
 UNINSTALL=0
 LIST_ONLY=0
@@ -69,6 +71,7 @@ target_present() {
   case "$1" in
     claude) command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ] ;;
     codex)  command -v codex  >/dev/null 2>&1 || [ -d "$HOME/.codex" ] ;;
+    opencode) command -v opencode >/dev/null 2>&1 || [ -d "$HOME/.config/opencode" ] ;;
     hermes) command -v hermes >/dev/null 2>&1 || [ -d "$HOME/.hermes" ] ;;
     kimi)   command -v kimi   >/dev/null 2>&1 || [ -d "$HOME/.kimi-code" ] ;;
     gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
@@ -86,6 +89,7 @@ target_installed() {
   case "$1" in
     claude) grep -qF "session-start.sh" "$(claude_settings_file)" 2>/dev/null ;;
     codex)  grep -qF "session-start.sh" "$HOME/.codex/hooks.json" 2>/dev/null ;;
+    opencode) grep -qF "$MARK" "$HOME/.config/opencode/plugins/agent-plugin.ts" 2>/dev/null ;;
     hermes) grep -qF "$MARK" "$HOME/.hermes/config.yaml" 2>/dev/null ;;
     kimi)   grep -qF "$MARK" "$HOME/.kimi-code/config.toml" 2>/dev/null ;;
     gemini) grep -qF "$MARK" "$HOME/.gemini/GEMINI.md" 2>/dev/null ;;
@@ -252,6 +256,166 @@ print("changed")
 PY
 }
 
+# opencode_plugin FILE install|uninstall — manage the OpenCode chat.message
+# adapter as a complete, marked file. The installed module calls the canonical
+# plain-format hook once per session and injects its output as a synthetic part.
+opencode_plugin() {
+  PLUGIN_FILE="$1" MODE="$2" HOOK_PATH="$HOOK_SCRIPT" INSTALL_MARK="$MARK" \
+    python3 - <<'PY'
+import json
+import os
+import shutil
+import sys
+import time
+from pathlib import Path
+
+path = Path(os.environ["PLUGIN_FILE"])
+mode = os.environ["MODE"]
+hook_path = os.environ["HOOK_PATH"]
+mark = os.environ["INSTALL_MARK"]
+
+template = r'''// >>> agent-plugin:vibe-lore >>>
+// OpenCode adapter for choirboy-prompt.
+// Injects the canonical fixed lore once per session as a synthetic text part.
+// Fail-open: a missing hook, timeout, or malformed payload never blocks chat.
+
+import { spawnSync } from "child_process"
+import { randomUUID } from "crypto"
+import type { Plugin } from "@opencode-ai/plugin"
+
+const HOOK_SCRIPT = __HOOK_SCRIPT__
+const DELIVERY_MARKER = "<choirboy-delivery "
+const MAX_TRACKED_SESSIONS = 4096
+const deliveredSessions = new Set<string>()
+
+function rememberSession(sessionID: string) {
+  if (deliveredSessions.size >= MAX_TRACKED_SESSIONS) {
+    const oldest = deliveredSessions.values().next().value
+    if (typeof oldest === "string") deliveredSessions.delete(oldest)
+  }
+  deliveredSessions.add(sessionID)
+}
+
+export const AgentPlugin: Plugin = async ({ client, directory }) => {
+  return {
+    "chat.message": async (input, output) => {
+      try {
+        const sessionID = typeof input.sessionID === "string" ? input.sessionID : ""
+        if (!sessionID) return
+
+        const parts = output.parts as any[]
+        if (!Array.isArray(parts)) return
+        if (
+          parts.some(
+            (part) =>
+              part &&
+              part.type === "text" &&
+              typeof part.text === "string" &&
+              part.text.includes(DELIVERY_MARKER),
+          )
+        ) {
+          rememberSession(sessionID)
+          return
+        }
+        if (deliveredSessions.has(sessionID)) return
+
+        // The in-memory set covers a long-running TUI/server process. The
+        // persisted session history also prevents duplicate delivery when a
+        // headless session is resumed by a fresh OpenCode process.
+        const historyResult = await client.session.messages({
+          path: { id: sessionID },
+          query: { directory },
+        })
+        const history = historyResult.data
+        if (!Array.isArray(history)) return
+        if (
+          history.some(
+            (message) =>
+              message.info.role === "user" &&
+              message.parts.some(
+                (part) =>
+                  part.type === "text" &&
+                  part.synthetic === true &&
+                  part.text.includes(DELIVERY_MARKER),
+              ),
+          )
+        ) {
+          rememberSession(sessionID)
+          return
+        }
+
+        const result = spawnSync("bash", [HOOK_SCRIPT, "--format", "plain"], {
+          encoding: "utf8",
+          timeout: 15000,
+          maxBuffer: 2 * 1024 * 1024,
+        })
+        const injected = (result.stdout ?? "").trim()
+        if (
+          result.status !== 0 ||
+          !injected.includes("<choirboy-delivery ") ||
+          !injected.includes("<choirboy-context>")
+        ) {
+          return
+        }
+
+        parts.unshift({
+          id: `prt_choirboy_${randomUUID().replaceAll("-", "")}`,
+          sessionID,
+          messageID: output.message.id,
+          type: "text",
+          text: injected,
+          synthetic: true,
+        })
+        rememberSession(sessionID)
+      } catch {
+        // fail-open: lore delivery must never break the OpenCode session
+      }
+    },
+  }
+}
+
+export default AgentPlugin
+// <<< agent-plugin:vibe-lore <<<
+'''
+content = template.replace("__HOOK_SCRIPT__", json.dumps(hook_path, ensure_ascii=False))
+
+def backup() -> Path:
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    destination = path.with_name(f"{path.name}.bak.{stamp}.{os.getpid()}")
+    shutil.copy2(path, destination)
+    return destination
+
+if mode == "install":
+    current = path.read_text(encoding="utf-8") if path.is_file() else None
+    if current == content:
+        print("unchanged")
+        raise SystemExit(0)
+    if current is not None and mark not in current:
+        print(f"refusing to overwrite unmarked file: {path}", file=sys.stderr)
+        raise SystemExit(2)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if current is not None:
+        backup()
+    temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}")
+    temporary.write_text(content, encoding="utf-8")
+    os.replace(temporary, path)
+    print("changed")
+elif mode == "uninstall":
+    if not path.is_file():
+        print("unchanged")
+        raise SystemExit(0)
+    current = path.read_text(encoding="utf-8")
+    if mark not in current:
+        print(f"refusing to remove unmarked file: {path}", file=sys.stderr)
+        raise SystemExit(2)
+    backup()
+    path.unlink()
+    print("changed")
+else:
+    raise SystemExit(f"unknown mode: {mode}")
+PY
+}
+
 # hermes_allowlist COMMAND install|uninstall — (un)approve the exact
 # (event, command) pair in ~/.hermes/shell-hooks-allowlist.json.
 hermes_allowlist() {
@@ -367,6 +531,28 @@ do_codex() {
   fi
 }
 
+do_opencode() {
+  local file="$HOME/.config/opencode/plugins/agent-plugin.ts"
+  local status
+  if [ "$UNINSTALL" = 1 ]; then
+    echo "opencode: removing chat.message plugin from $file"
+    if ! status="$(opencode_plugin "$file" uninstall)"; then
+      die "opencode: refusing unsafe uninstall; inspect $file"
+    fi
+    [ "$status" = "changed" ] \
+      && echo "  plugin removed (timestamped backup kept)" \
+      || echo "  plugin was not installed"
+  else
+    echo "opencode: installing chat.message plugin into $file"
+    if ! status="$(opencode_plugin "$file" install)"; then
+      die "opencode: refusing to overwrite an unmarked plugin; move it aside or merge manually"
+    fi
+    [ "$status" = "changed" ] \
+      && echo "  plugin installed (synthetic first-message lore injection)" \
+      || echo "  plugin already installed — skipped"
+  fi
+}
+
 HERMES_HOOK_CMD="bash \"$HOOK_SCRIPT\" --format hermes"
 HERMES_CONFIG_CMD="${HERMES_HOOK_CMD//\\/\\\\}"
 HERMES_CONFIG_CMD="${HERMES_CONFIG_CMD//\"/\\\"}"
@@ -465,6 +651,7 @@ if [ "$LIST_ONLY" = 1 ]; then
     case "$t" in
       claude) loc="$(claude_settings_file)" ;;
       codex)  loc="$HOME/.codex/hooks.json" ;;
+      opencode) loc="$HOME/.config/opencode/plugins/agent-plugin.ts" ;;
       hermes) loc="$HOME/.hermes/config.yaml" ;;
       kimi)   loc="$HOME/.kimi-code/config.toml" ;;
       gemini) loc="$HOME/.gemini/GEMINI.md" ;;
@@ -479,7 +666,7 @@ fi
 
 for t in $TARGETS; do
   case "$t" in
-    claude|codex|hermes|kimi|gemini) "do_$t" ;;
+    claude|codex|opencode|hermes|kimi|gemini) "do_$t" ;;
     *) die "unknown target: $t (known: $(echo "$ALL_TARGETS" | tr ' ' ','))" ;;
   esac
 done

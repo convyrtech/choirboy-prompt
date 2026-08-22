@@ -10,7 +10,8 @@ Hook, skill, installer, diagnostics, and package checks. The canonical runner is
 - Each check is a separate bash command with an explicit PASS/FAIL.
 - The suite can be invoked from anywhere; temp files go under `/tmp` with the
   `choirboy-test.` prefix.
-- Temp files are removed after the run.
+- Temp files are removed after the run. Set `CHOIRBOY_TEST_KEEP_TMP=1` to keep
+  them and print the exact directory for inspection.
 - The payload is checked **in the exact form the runtime will receive it**, not
   "by feel".
 
@@ -198,6 +199,18 @@ mv /path/to/plugin /path/to/plugin-moved
 Expected: exactly one entry of our hook in `~/.claude/settings.json` (not two);
 the old one replaced the new one — `json_hook` matches by script name.
 
+### 3.7. OpenCode adapter lifecycle
+
+The canonical suite installs into an isolated `HOME`, repeats the install,
+checks `--list`, refreshes a deliberately drifted marked plugin with a backup,
+and uninstalls with another backup. It also verifies that an unmarked foreign
+file at `~/.config/opencode/plugins/agent-plugin.ts` is never overwritten.
+
+Expected: `OpenCode install, list, idempotent refresh, backup, and rollback`
+and `OpenCode foreign-plugin guard` both print `PASS`. The generated adapter
+must use `chat.message`, persisted session history, a synthetic text part, the
+canonical plain hook, and fail-open error handling.
+
 ---
 
 ## 4. Content checks (sanitization)
@@ -234,7 +247,7 @@ python3 scripts/package-plugin.py
 
 - After any `hooks/session-start.sh` edit — §2.2–2.8.
 - After editing `.claude-plugin/plugin.json` or `marketplace.json` — §2.1 and §3.0.
-- After an `install.sh` edit — §3.1–3.6.
+- After an `install.sh` edit — §3.1–3.7.
 - After content-file edits — run `python3 scripts/build-context.py`, then the
   canonical suite and §4 sanitization.
 - After an `instruction_block` edit — grep by the marker in installed files

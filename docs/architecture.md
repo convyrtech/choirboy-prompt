@@ -157,8 +157,9 @@ markdown). В конце добавляется канонический `contex
 
 ### 3.2. `plain` — сырой текст
 
-Хук печатает пейлоад дословно в stdout. Используется рантаймами,
-которые добавляют stdout хука в контекст сессии (Kimi Code).
+Хук печатает пейлоад дословно в stdout. Kimi Code добавляет этот stdout в
+контекст сессии; сгенерированный адаптер OpenCode перехватывает его и добавляет
+synthetic text-part перед первым пользовательским сообщением.
 
 ```bash
 bash hooks/session-start.sh --format plain | head -40
@@ -219,6 +220,7 @@ bash hooks/session-start.sh --format plain | head -40
 | Claude Chat | custom plugin skill | inline `load-context` | — |
 | Claude Cowork | custom plugin hook/skill | hook где доступен, skill fallback | claude / — |
 | Codex | `~/.codex/hooks.json` | `SessionStart` | claude |
+| OpenCode | `~/.config/opencode/plugins/agent-plugin.ts` | глобальный `chat.message`-плагин | plain → synthetic text-part |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent-allowlist | hermes |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart | plain |
 | Gemini | `~/.gemini/GEMINI.md` | маркированный блок-указатель | — (читает файлы сам) |
@@ -235,6 +237,13 @@ bash hooks/session-start.sh --format plain | head -40
 сгенерированный inline skill. Cowork видит оба компонента, но skill остаётся
 fallback, если его runtime теряет `SessionStart`.
 
+Адаптер OpenCode генерируется `install.sh`. Он запускает канонический plain-хук
+с timeout 15 секунд, валидирует delivery-маркеры и меняет только parts текущего
+пользовательского сообщения. In-memory set покрывает живой процесс, а
+сохранённая история сообщений OpenCode предотвращает повторную инъекцию после
+возобновления headless-сессии новым процессом. Ошибка хука, истории, timeout или
+пейлоада превращается в тихий no-op: чат остаётся fail-open.
+
 ---
 
 ## 6. Ключевые свойства
@@ -250,6 +259,8 @@ fallback, если его runtime теряет `SessionStart`.
   входят в пакет и документацию, но не инъектятся в каждую беседу.
 - **Наблюдаемое исполнение.** Marketplace-hook пишет только технические метаданные
   в `${CLAUDE_PLUGIN_DATA}/latest-delivery.log`; сам лор не логируется.
+- **OpenCode-доставка — один раз на сохранённую сессию.** Перед запуском хука
+  проверяются и set живого процесса, и предыдущие synthetic parts в истории.
 - **Зависимости минимальны.** Форматы `claude` и `plain` требуют только Bash;
   `hermes` дополнительно требует `jq` или `python3` для разбора stdin.
   Терминальному `install.sh` нужен `python3`.

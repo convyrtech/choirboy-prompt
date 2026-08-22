@@ -13,7 +13,7 @@
 
 <p>
 <img alt="Bash 5.0+" src="https://img.shields.io/badge/bash-5.0%2B-4EAA25?style=flat-square&logo=gnubash&logoColor=white">
-<img alt="runtimes" src="https://img.shields.io/badge/runtimes-claude%20%C2%B7%20codex%20%C2%B7%20hermes%20%C2%B7%20kimi%20%C2%B7%20gemini-22D3EE?style=flat-square">
+<img alt="runtimes" src="https://img.shields.io/badge/runtimes-claude%20%C2%B7%20codex%20%C2%B7%20opencode%20%C2%B7%20hermes%20%C2%B7%20kimi%20%C2%B7%20gemini-22D3EE?style=flat-square">
 <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-3FB950?style=flat-square"></a>
 </p>
 
@@ -95,7 +95,7 @@ Marketplace 安装与 `./install.sh --target claude` 二选一；如果同时启
 
 ### 从终端安装
 
-你需要 Linux 或 macOS、`git`、`python3`（`install.sh` 必需），以及五种
+你需要 Linux 或 macOS、`git`、`python3`（`install.sh` 必需），以及六种
 受支持运行时中的任意一种。在 Windows 上，此多运行时安装方式使用 WSL。
 
 #### 1. 打开终端
@@ -131,12 +131,12 @@ cd choirboy-prompt
 ./install.sh
 ```
 
-安装器会自动检测你的智能体运行时，并在每个运行时中注册 SessionStart 钩子。
+安装器会自动检测你的智能体运行时，并为每个运行时注册对应的钩子或插件。
 每次修改配置都会生成备份（`*.bak.<timestamp>`）。
 只安装到指定运行时：
 
 ```bash
-./install.sh --target claude,codex   # 指定安装
+./install.sh --target claude,opencode   # 指定安装
 ```
 
 #### 4. 验证
@@ -203,7 +203,8 @@ cd choirboy-prompt
 | 原生 session 演示 | 同一段手写对话的 Claude Code、Codex 与 Kimi store | `sessions/` |
 | 投递诊断 | 报告 hook/skill、版本、hash 与每次 hook 的 nonce | delivery marker、`skills/diagnose/SKILL.md` |
 | Claude plugin 分发 | 带版本 marketplace 与可验证 custom-plugin ZIP | `.claude-plugin/marketplace.json`、`scripts/package-plugin.py` |
-| 多运行时安装 | 在 Claude Code、Codex、Hermes、Kimi Code、Gemini 中注册钩子 | `install.sh` |
+| OpenCode 适配器 | 全局 `chat.message` 插件对每个持久化会话注入一次 synthetic lore 部分 | `~/.config/opencode/plugins/agent-plugin.ts` |
+| 多运行时安装 | 在 Claude Code、Codex、OpenCode、Hermes、Kimi Code、Gemini 中注册集成 | `install.sh` |
 | 幂等性 | 所有块都带 `agent-plugin:vibe-lore` 标记，重复运行不会重复 | 标记 `>>> / <<<` |
 | 备份与回滚 | 每次修改运行时配置都生成带时间戳的备份；`--uninstall` 删除块 | `install.sh` |
 | Hermes 授权白名单 | 在 `shell-hooks-allowlist.json` 中注册精确的 (event, command) 对 | `install.sh` |
@@ -257,6 +258,7 @@ session-start.sh  (所选运行时的钩子)
 | Claude Chat | custom plugin | load-context skill；无 SessionStart |
 | Claude Cowork | custom plugin | 可用时运行 SessionStart；skill 回退 |
 | Codex | `~/.codex/hooks.json` | SessionStart 钩子（需在 `[features]` 中开启 `hooks = true`） |
+| OpenCode | `~/.config/opencode/plugins/agent-plugin.ts` | 全局 `chat.message` 插件；在第一条消息中 synthetic 注入 lore |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + 授权白名单，仅第一轮 |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart，plain 输出 |
 | Gemini | `~/.gemini/GEMINI.md` | 指向 lore 文件的带标记指针 |

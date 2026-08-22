@@ -65,7 +65,7 @@ delivery from a `choirboy-delivery` marker instead of relying on model wording.
 ## 1. General schema
 
 ```text
-./install.sh [--target claude,codex] [--uninstall] [--list]
+./install.sh [--target claude,opencode] [--uninstall] [--list]
              [--instructions FILE] [--project] [--settings PATH]
 ```
 
@@ -91,6 +91,7 @@ Runtime detection — by binary or config-directory presence:
 ```bash
 claude) command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ] ;;
 codex)  command -v codex  >/dev/null 2>&1 || [ -d "$HOME/.codex" ] ;;
+opencode) command -v opencode >/dev/null 2>&1 || [ -d "$HOME/.config/opencode" ] ;;
 hermes) command -v hermes >/dev/null 2>&1 || [ -d "$HOME/.hermes" ] ;;
 kimi)   command -v kimi   >/dev/null 2>&1 || [ -d "$HOME/.kimi-code" ] ;;
 gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
@@ -98,7 +99,7 @@ gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
 
 Target selection rules:
 
-- `--target claude,codex` — only the listed ones.
+- `--target claude,opencode` — only the listed ones.
 - `--target none` — empty list, useful with `--instructions`.
 - Without `--target` — all detected runtimes.
 - `--project` / `--settings PATH` imply the `claude` target.
@@ -109,6 +110,7 @@ Each target writes to its own file:
 |---|---|---|
 | claude | `~/.claude/settings.json` (or `--settings`/`--project`) | JSON hook `hooks.SessionStart` |
 | codex | `~/.codex/hooks.json` | JSON hook `SessionStart` |
+| opencode | `~/.config/opencode/plugins/agent-plugin.ts` | global `chat.message` plugin |
 | hermes | `~/.hermes/config.yaml` | marked `hooks.pre_llm_call` block + consent allowlist |
 | kimi | `~/.kimi-code/config.toml` | marked `[[hooks]]` block |
 | gemini | `~/.gemini/GEMINI.md` | marked HTML pointer block |
@@ -139,6 +141,8 @@ The marker is both the ownership identifier and the block boundary for removal.
 - A marketplace hook lives in the plugin cache and is not written into the
   `settings.json` hook array. The marketplace and manual Claude hook are
   alternatives, not two layers to enable at once.
+- The OpenCode target owns one complete marked plugin file. An identical
+  reinstall is a no-op; an update is backed up and replaced atomically.
 
 ### 3.3. The marker pitfall
 
@@ -182,9 +186,10 @@ JSON entries, does not touch foreign ones.
 | `block_add` | Add a marked block | idempotent by START |
 | `block_remove` | Remove a marked block | by START/END, cleans the trailing blank line |
 | `json_hook` | Hook into Claude-shaped JSON | match by script name, `is_ours()`/`has_exact()` |
+| `opencode_plugin` | Manage the OpenCode adapter | marked-file guard, atomic replace, timestamped backup |
 | `hermes_allowlist` | Hermes consent allowlist | exact (event, command) pair |
 | `instruction_block` | Pointer-block text | HTML or `#` comments |
-| `do_claude` / `do_codex` / `do_hermes` / `do_kimi` / `do_gemini` | Target install | per-target logic |
+| `do_claude` / `do_codex` / `do_opencode` / `do_hermes` / `do_kimi` / `do_gemini` | Target install | per-target logic |
 | `do_instructions` | Install into an arbitrary file | style by extension |
 
 ### 5.1. `json_hook` — details
@@ -239,6 +244,8 @@ Work with text configs (config.yaml, config.toml, GEMINI.md):
 8. **`--target none` + `--instructions`.** Only pointer blocks, no runtimes.
 9. **Parallel Hermes starts.** State file in `/tmp` without locks — races are
    possible (known limitation, see README).
+10. **Foreign OpenCode plugin at the managed path.** Install and uninstall
+    refuse to overwrite or remove a file without the ownership marker.
 
 ---
 
@@ -246,6 +253,8 @@ Work with text configs (config.yaml, config.toml, GEMINI.md):
 
 ```bash
 ./install.sh --list                    # statuses
+./install.sh --target opencode         # install the global OpenCode adapter
+grep -F 'agent-plugin:vibe-lore' ~/.config/opencode/plugins/agent-plugin.ts
 bash hooks/session-start.sh --format plain | head -40   # payload
 echo '{"session_id":"demo","extra":{"is_first_turn":true}}' \
   | bash hooks/session-start.sh --format hermes | head -c 120   # first turn

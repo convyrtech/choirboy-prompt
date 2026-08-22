@@ -6,7 +6,14 @@ cd "$ROOT"
 VERSION="$(python3 -c 'import json; print(json.load(open(".claude-plugin/plugin.json", encoding="utf-8"))["version"])')"
 
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/choirboy-test.XXXXXX")"
-trap 'rm -rf "$TEST_ROOT"' EXIT
+cleanup() {
+  if [ "${CHOIRBOY_TEST_KEEP_TMP:-0}" = 1 ]; then
+    printf 'Test artifacts preserved at %s\n' "$TEST_ROOT"
+  else
+    rm -rf "$TEST_ROOT"
+  fi
+}
+trap cleanup EXIT
 
 pass() { printf 'PASS %s\n' "$1"; }
 
@@ -211,6 +218,61 @@ assert f'command: "{command.replace(chr(34), chr(92) + chr(34))}"' in hermes
 assert {"event": "pre_llm_call", "command": command} in allowlist["approvals"]
 PY
 pass "quoted Hermes and Kimi paths"
+
+opencode_home="$TEST_ROOT/opencode-home"
+opencode_plugin="$opencode_home/.config/opencode/plugins/agent-plugin.ts"
+mkdir -p "$opencode_home"
+HOME="$opencode_home" ./install.sh --target opencode >/dev/null
+HOME="$opencode_home" ./install.sh --target opencode >/dev/null
+python3 - "$opencode_plugin" "$ROOT/hooks/session-start.sh" <<'PY'
+import json, sys
+from pathlib import Path
+
+plugin = Path(sys.argv[1]).read_text(encoding="utf-8")
+hook = sys.argv[2]
+assert plugin.count("agent-plugin:vibe-lore") == 2
+assert f"const HOOK_SCRIPT = {json.dumps(hook)}" in plugin
+assert '"chat.message"' in plugin
+assert "new Set<string>()" in plugin
+assert "deliveredSessions.has(sessionID)" in plugin
+assert "client.session.messages" in plugin
+assert "part.synthetic === true" in plugin
+assert "rememberSession(sessionID)" in plugin
+assert 'spawnSync("bash", [HOOK_SCRIPT, "--format", "plain"]' in plugin
+assert "result.status !== 0" in plugin
+assert 'id: `prt_choirboy_${randomUUID().replaceAll("-", "")}`' in plugin
+assert "sessionID," in plugin
+assert "messageID: output.message.id" in plugin
+assert "synthetic: true" in plugin
+assert "catch {" in plugin
+PY
+if compgen -G "$opencode_plugin.bak.*" >/dev/null; then
+  echo "idempotent OpenCode install unexpectedly created a backup" >&2
+  exit 1
+fi
+HOME="$opencode_home" ./install.sh --list > "$TEST_ROOT/opencode-list.txt"
+grep -Eq '^opencode[[:space:]]+installed[[:space:]]+' "$TEST_ROOT/opencode-list.txt"
+printf '\n// test drift\n' >> "$opencode_plugin"
+HOME="$opencode_home" ./install.sh --target opencode >/dev/null
+compgen -G "$opencode_plugin.bak.*" >/dev/null
+! grep -qF '// test drift' "$opencode_plugin"
+HOME="$opencode_home" ./install.sh --uninstall --target opencode >/dev/null
+test ! -e "$opencode_plugin"
+compgen -G "$opencode_plugin.bak.*" >/dev/null
+HOME="$opencode_home" ./install.sh --list > "$TEST_ROOT/opencode-list-uninstalled.txt"
+grep -Eq '^opencode[[:space:]]+detected[[:space:]]+' "$TEST_ROOT/opencode-list-uninstalled.txt"
+pass "OpenCode install, list, idempotent refresh, backup, and rollback"
+
+foreign_home="$TEST_ROOT/opencode-foreign-home"
+foreign_plugin="$foreign_home/.config/opencode/plugins/agent-plugin.ts"
+mkdir -p "$(dirname "$foreign_plugin")"
+printf '// foreign OpenCode plugin\n' > "$foreign_plugin"
+if HOME="$foreign_home" ./install.sh --target opencode >/dev/null 2>&1; then
+  echo "OpenCode install overwrote an unmarked plugin" >&2
+  exit 1
+fi
+grep -qxF '// foreign OpenCode plugin' "$foreign_plugin"
+pass "OpenCode foreign-plugin guard"
 
 python3 - <<'PY'
 import json

@@ -13,7 +13,7 @@
 
 <p>
 <img alt="Bash 5.0+" src="https://img.shields.io/badge/bash-5.0%2B-4EAA25?style=flat-square&logo=gnubash&logoColor=white">
-<img alt="runtimes" src="https://img.shields.io/badge/runtimes-claude%20%C2%B7%20codex%20%C2%B7%20hermes%20%C2%B7%20kimi%20%C2%B7%20gemini-22D3EE?style=flat-square">
+<img alt="runtimes" src="https://img.shields.io/badge/runtimes-claude%20%C2%B7%20codex%20%C2%B7%20opencode%20%C2%B7%20hermes%20%C2%B7%20kimi%20%C2%B7%20gemini-22D3EE?style=flat-square">
 <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-3FB950?style=flat-square"></a>
 </p>
 
@@ -98,7 +98,7 @@ enabling both would run the same `SessionStart` payload twice.
 ### Install from a terminal
 
 You need Linux or macOS, `git`, `python3` (required by `install.sh`), and any of
-the five supported runtimes. On Windows, use WSL for this multi-runtime path.
+the six supported runtimes. On Windows, use WSL for this multi-runtime path.
 
 #### 1. Open a terminal
 
@@ -133,12 +133,13 @@ cd choirboy-prompt
 ./install.sh
 ```
 
-The installer detects your agent runtimes and registers the SessionStart hook
-in each of them. Every config edit is backed up (`*.bak.<timestamp>`).
+The installer detects your agent runtimes and registers the matching hook or
+plugin integration in each of them. Every config edit is backed up
+(`*.bak.<timestamp>`).
 To install into specific runtimes only:
 
 ```bash
-./install.sh --target claude,codex   # targeted install
+./install.sh --target claude,opencode   # targeted install
 ```
 
 #### 4. Verify
@@ -212,7 +213,8 @@ build detection (see [Disclosure and boundaries](#disclosure-and-boundaries)).
 | Native session demonstration | Same hand-written dialogue in Claude Code, Codex, and Kimi stores | `sessions/` |
 | Delivery diagnostics | Reports hook vs skill, version, hash, and per-hook nonce | delivery marker, `skills/diagnose/SKILL.md` |
 | Claude plugin distribution | Versioned marketplace plus validated custom-plugin ZIP | `.claude-plugin/marketplace.json`, `scripts/package-plugin.py` |
-| Multi-runtime install | Registers the hook in Claude Code, Codex, Hermes, Kimi Code, Gemini | `install.sh` |
+| OpenCode adapter | Global `chat.message` plugin injects one synthetic lore part per persisted session | `~/.config/opencode/plugins/agent-plugin.ts` |
+| Multi-runtime install | Registers the integration in Claude Code, Codex, OpenCode, Hermes, Kimi Code, Gemini | `install.sh` |
 | Idempotency | All blocks are marked `agent-plugin:vibe-lore`; re-running duplicates nothing | markers `>>> / <<<` |
 | Backups and rollback | Every runtime config edit gets a timestamped backup; `--uninstall` removes blocks | `install.sh` |
 | Hermes consent allowlist | Registers the exact (event, command) pair in `shell-hooks-allowlist.json` | `install.sh` |
@@ -267,6 +269,7 @@ the model reads the lore as ITS memory
 | Claude Chat | custom plugin | load-context skill; no SessionStart hooks |
 | Claude Cowork | custom plugin | SessionStart where available; load-context skill fallback |
 | Codex | `~/.codex/hooks.json` | SessionStart hook (needs `hooks = true` in `[features]`) |
+| OpenCode | `~/.config/opencode/plugins/agent-plugin.ts` | global `chat.message` plugin; synthetic first-message lore injection |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent allowlist, first turn only |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart, plain output |
 | Gemini | `~/.gemini/GEMINI.md` | marked pointer to the lore files |

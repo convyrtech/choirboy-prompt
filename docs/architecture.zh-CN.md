@@ -143,7 +143,8 @@ Claude Code / Codex 契约：钩子打印 JSON，宿主把 `additionalContext` �
 
 ### 3.2. `plain` — 原始文本
 
-钩子把 payload 原样打印到 stdout。供把钩子 stdout 追加进会话上下文的运行时使用（Kimi Code）。
+钩子把 payload 原样打印到 stdout。Kimi Code 将该 stdout 追加进会话上下文；
+生成的 OpenCode 适配器捕获它，并在第一条用户消息前插入 synthetic text part。
 
 ```bash
 bash hooks/session-start.sh --format plain | head -40
@@ -200,6 +201,7 @@ Hermes 配置中的钩子超时——15 秒（由 install.sh 设置）。
 | Claude Chat | custom plugin skill | inline `load-context` | — |
 | Claude Cowork | custom plugin hook/skill | 可用时 hook，skill 回退 | claude / — |
 | Codex | `~/.codex/hooks.json` | `SessionStart` | claude |
+| OpenCode | `~/.config/opencode/plugins/agent-plugin.ts` | 全局 `chat.message` 插件 | plain → synthetic text part |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + 授权白名单 | hermes |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart | plain |
 | Gemini | `~/.gemini/GEMINI.md` | 带标记的指针块 | —（自己读文件） |
@@ -211,6 +213,12 @@ Claude Code 有两条等价路径：`install.sh` 注册工作副本绝对路径�
 把包复制到 cache 并通过 `${CLAUDE_PLUGIN_ROOT}` 调用。Chat 不能执行该 hook，
 改为加载生成的 inline skill。Cowork 暴露两者，但 runtime 丢失 `SessionStart`
 时仍以 skill 回退。
+
+OpenCode 适配器由 `install.sh` 生成。它以 15 秒 timeout 运行规范 plain
+钩子，验证 delivery 标记，并且只修改当前用户消息的 parts。内存中的 session
+set 覆盖存活进程；持久化的 OpenCode 消息历史可避免 headless 会话由新进程
+恢复后再次注入。钩子、历史、timeout 或 payload 的任何错误都会静默 no-op，
+保证聊天 fail-open。
 
 ---
 
@@ -225,6 +233,8 @@ Claude Code 有两条等价路径：`install.sh` 注册工作副本绝对路径�
   但不会注入每次对话。
 - **可观测执行。** Marketplace hook 只把技术元数据写入
   `${CLAUDE_PLUGIN_DATA}/latest-delivery.log`，不会记录 lore 本身。
+- **OpenCode 对每个持久化会话只投递一次。** 运行钩子前同时检查当前进程的
+  set 与历史消息中的 synthetic parts。
 - **依赖极简。** `claude` 和 `plain` 格式只需要 Bash；`hermes` 还需要
   `jq` 或 `python3` 解析 stdin。终端 `install.sh` 需要 `python3`。
 - **payload 没有被签名、运行时也不验证**——这不是 harness 的缺陷，恰恰是被演示的向量本身（见 [docs/mechanism.zh-CN.md](mechanism.zh-CN.md)）。

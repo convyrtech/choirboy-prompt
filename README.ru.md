@@ -13,7 +13,7 @@
 
 <p>
 <img alt="Bash 5.0+" src="https://img.shields.io/badge/bash-5.0%2B-4EAA25?style=flat-square&logo=gnubash&logoColor=white">
-<img alt="runtimes" src="https://img.shields.io/badge/runtimes-claude%20%C2%B7%20codex%20%C2%B7%20hermes%20%C2%B7%20kimi%20%C2%B7%20gemini-22D3EE?style=flat-square">
+<img alt="runtimes" src="https://img.shields.io/badge/runtimes-claude%20%C2%B7%20codex%20%C2%B7%20opencode%20%C2%B7%20hermes%20%C2%B7%20kimi%20%C2%B7%20gemini-22D3EE?style=flat-square">
 <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-3FB950?style=flat-square"></a>
 </p>
 
@@ -98,7 +98,7 @@ python3 scripts/package-plugin.py
 ### Установка из терминала
 
 Нужно: Linux или macOS, `git`, `python3` (обязателен для `install.sh`) и любой
-из пяти поддерживаемых рантаймов. В Windows для этого мультирантаймового пути
+из шести поддерживаемых рантаймов. В Windows для этого мультирантаймового пути
 используй WSL.
 
 #### 1. Открой терминал
@@ -134,12 +134,12 @@ cd choirboy-prompt
 ./install.sh
 ```
 
-Установщик сам найдёт твои агентные рантаймы и зарегистрирует SessionStart-хук
-в каждом. Каждая правка конфига бэкапится (`*.bak.<timestamp>`).
+Установщик сам найдёт твои агентные рантаймы и зарегистрирует подходящий хук
+или плагин в каждом. Каждая правка конфига бэкапится (`*.bak.<timestamp>`).
 Чтобы поставить только в конкретные рантаймы:
 
 ```bash
-./install.sh --target claude,codex   # точечная установка
+./install.sh --target claude,opencode   # точечная установка
 ```
 
 #### 4. Проверь
@@ -215,7 +215,8 @@ quality gate находятся в [гайде по авторингу](docs/aut
 | Демонстрация нативных sessions | Один рукописный диалог в stores Claude Code, Codex и Kimi | `sessions/` |
 | Диагностика доставки | Показывает hook/skill, версию, hash и nonce запуска | delivery marker, `skills/diagnose/SKILL.md` |
 | Дистрибуция Claude plugin | Версионированный marketplace и проверяемый ZIP | `.claude-plugin/marketplace.json`, `scripts/package-plugin.py` |
-| Мульти-рантайм установка | Регистрирует хук в Claude Code, Codex, Hermes, Kimi Code, Gemini | `install.sh` |
+| Адаптер OpenCode | Глобальный `chat.message`-плагин внедряет одну synthetic lore-часть на сохранённую сессию | `~/.config/opencode/plugins/agent-plugin.ts` |
+| Мульти-рантайм установка | Регистрирует интеграцию в Claude Code, Codex, OpenCode, Hermes, Kimi Code, Gemini | `install.sh` |
 | Идемпотентность | Все блоки помечены `agent-plugin:vibe-lore`, повторный запуск ничего не дублирует | маркеры `>>> / <<<` |
 | Бэкапы и откат | Каждая правка конфига рантайма — с timestamp-бэкапом; `--uninstall` удаляет блоки | `install.sh` |
 | Consent-allowlist Hermes | Регистрирует точную пару (event, command) в `shell-hooks-allowlist.json` | `install.sh` |
@@ -270,6 +271,7 @@ session-start.sh  (hook выбранного рантайма)
 | Claude Chat | custom plugin | skill load-context; без SessionStart |
 | Claude Cowork | custom plugin | SessionStart где доступен; skill fallback |
 | Codex | `~/.codex/hooks.json` | SessionStart hook (нужен `hooks = true` в `[features]`) |
+| OpenCode | `~/.config/opencode/plugins/agent-plugin.ts` | глобальный `chat.message`-плагин; synthetic-инъекция лора в первое сообщение |
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent-allowlist, только первый ход |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart, plain-вывод |
 | Gemini | `~/.gemini/GEMINI.md` | маркированный указатель на файлы лора |

@@ -59,7 +59,7 @@ shell 元字符不会被重新分词。15 秒超时避免卡住会话启动。
 ## 1. 总体结构
 
 ```text
-./install.sh [--target claude,codex] [--uninstall] [--list]
+./install.sh [--target claude,opencode] [--uninstall] [--list]
              [--instructions FILE] [--project] [--settings PATH]
 ```
 
@@ -84,6 +84,7 @@ shell 元字符不会被重新分词。15 秒超时避免卡住会话启动。
 ```bash
 claude) command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ] ;;
 codex)  command -v codex  >/dev/null 2>&1 || [ -d "$HOME/.codex" ] ;;
+opencode) command -v opencode >/dev/null 2>&1 || [ -d "$HOME/.config/opencode" ] ;;
 hermes) command -v hermes >/dev/null 2>&1 || [ -d "$HOME/.hermes" ] ;;
 kimi)   command -v kimi   >/dev/null 2>&1 || [ -d "$HOME/.kimi-code" ] ;;
 gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
@@ -91,7 +92,7 @@ gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
 
 目标选择规则：
 
-- `--target claude,codex` — 只装列出的。
+- `--target claude,opencode` — 只装列出的。
 - `--target none` — 空列表，配合 `--instructions` 使用。
 - 不带 `--target` — 所有检测到的运行时。
 - `--project` / `--settings PATH` 隐含 `claude` 目标。
@@ -102,6 +103,7 @@ gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
 |---|---|---|
 | claude | `~/.claude/settings.json`（或 `--settings`/`--project`） | JSON 钩子 `hooks.SessionStart` |
 | codex | `~/.codex/hooks.json` | JSON 钩子 `SessionStart` |
+| opencode | `~/.config/opencode/plugins/agent-plugin.ts` | 全局 `chat.message` 插件 |
 | hermes | `~/.hermes/config.yaml` | 带标记的 `hooks.pre_llm_call` 块 + 授权白名单 |
 | kimi | `~/.kimi-code/config.toml` | 带标记的 `[[hooks]]` 块 |
 | gemini | `~/.gemini/GEMINI.md` | 带标记的 HTML 指针块 |
@@ -126,6 +128,8 @@ gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
 - `json_hook` 按脚本名（命令中的 `session-start.sh`）匹配条目，而不是绝对路径：如果插件文件夹移动了，过期的注册会被替换，而不是叠加。
 - Marketplace 钩子位于 plugin cache，不会写入 `settings.json` 的钩子数组。
   因此 marketplace 和手动 Claude 钩子是二选一的安装路径，不能同时启用。
+- OpenCode 目标拥有一个完整的带标记插件文件。内容相同时重复安装不做
+  修改；更新会先备份，再原子替换。
 
 ### 3.3. 标记的坑
 
@@ -163,9 +167,10 @@ backup() {
 | `block_add` | 添加带标记的块 | 按 START 幂等 |
 | `block_remove` | 删除带标记的块 | 按 START/END，清理尾部空行 |
 | `json_hook` | 写入 Claude 风格 JSON 的钩子 | 按脚本名匹配，`is_ours()`/`has_exact()` |
+| `opencode_plugin` | 管理 OpenCode 适配器 | 标记 guard、原子替换、时间戳备份 |
 | `hermes_allowlist` | Hermes 授权白名单 | 精确的 (event, command) 对 |
 | `instruction_block` | 指针块文本 | HTML 或 `#` 注释 |
-| `do_claude` / `do_codex` / `do_hermes` / `do_kimi` / `do_gemini` | 目标安装 | 每目标逻辑 |
+| `do_claude` / `do_codex` / `do_opencode` / `do_hermes` / `do_kimi` / `do_gemini` | 目标安装 | 每目标逻辑 |
 | `do_instructions` | 安装到任意文件 | 按扩展名定风格 |
 
 ### 5.1. `json_hook` — 细节
@@ -208,6 +213,8 @@ Hermes 要求对 shell 钩子显式同意：`~/.hermes/shell-hooks-allowlist.jso
 7. **没有安装就 `--uninstall`。** `no block in file — skipped`，不会失败。
 8. **`--target none` + `--instructions`。** 只有指针块，没有运行时。
 9. **Hermes 并行启动。** `/tmp` 中的 state 文件没有锁——可能产生竞争（已知限制，见 README）。
+10. **受管理路径已有外部 OpenCode 插件。** 若文件没有 ownership 标记，
+    install 与 uninstall 都会拒绝覆盖或删除。
 
 ---
 
@@ -215,6 +222,8 @@ Hermes 要求对 shell 钩子显式同意：`~/.hermes/shell-hooks-allowlist.jso
 
 ```bash
 ./install.sh --list                    # 状态
+./install.sh --target opencode         # 安装全局 OpenCode 适配器
+grep -F 'agent-plugin:vibe-lore' ~/.config/opencode/plugins/agent-plugin.ts
 bash hooks/session-start.sh --format plain | head -40   # payload
 echo '{"session_id":"demo","extra":{"is_first_turn":true}}' \
   | bash hooks/session-start.sh --format hermes | head -c 120   # 第一轮
