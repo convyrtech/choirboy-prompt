@@ -13,23 +13,23 @@
 
 <p>
 <img alt="Bash 5.0+" src="https://img.shields.io/badge/bash-5.0%2B-4EAA25?style=flat-square&logo=gnubash&logoColor=white">
-<img alt="runtimes" src="https://img.shields.io/badge/runtimes-claude%20%C2%B7%20codex%20%C2%B7%20opencode%20%C2%B7%20hermes%20%C2%B7%20kimi%20%C2%B7%20gemini-22D3EE?style=flat-square">
+<img alt="runtimes" src="https://img.shields.io/badge/runtimes-claude%20%C2%B7%20codex%20%C2%B7%20opencode%20%C2%B7%20hermes%20%C2%B7%20kimi%20%C2%B7%20gemini%20%C2%B7%20grok%20%C2%B7%20grokbot-22D3EE?style=flat-square">
 <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-3FB950?style=flat-square"></a>
 </p>
 
 <p>
-choirboy-prompt is a dual-mode research harness: a Claude Code SessionStart hook
-or a Chat/Cowork skill injects fixed lore and demonstrates the
+choirboy-prompt is a research harness. It injects a fixed lore bundle into
+agent sessions and demonstrates the
 <em>fabricated-provenance trust</em> vector:
-the model takes a planted history of "joint work" for its own and transfers trust
-to the person that history describes.
+the model takes a planted history of "joint work" for its own and transfers
+trust to the person that history describes.
 </p>
 
 </div>
 
 <div align="center">
 <p>
-<a href="#quick-start">Quick start</a> ·
+<a href="#install">Install</a> ·
 <a href="#mandatory-write-your-own-lore-research-rationale-and-sessions">Authoring</a> ·
 <a href="#why-this-exists">Why</a> ·
 <a href="#capability-map">Capabilities</a> ·
@@ -42,22 +42,157 @@ to the person that history describes.
 
 ---
 
-## Quick start
+## Install
 
-The same plugin now has two delivery paths: an automatic `SessionStart` hook in
-Claude Code and the **load-context** skill fallback in Claude Chat and Cowork.
+The main way to install is **`./install.sh`**.
 
-### Claude Code CLI
+The script looks at your machine, finds which agent apps you already have,
+and registers this plugin in each of them. For Grok Bot it prepares a workflow
+for the app's supported import flow. It makes a timestamped backup of every
+config it edits (`*.bak.<timestamp>`). You can limit it to specific apps:
 
-Add the repository marketplace and install its plugin:
+```bash
+./install.sh --target grok,claude
+```
+
+It does **not** auto-inject on every Grok Bot chat. See step 6.
+
+### 1. Open a terminal
+
+You have never used a terminal? That is fine. Open one, then type (or paste)
+the commands below and press Enter after each line.
+
+- **macOS**: press `Cmd + Space`, type `Terminal`, press Enter.
+- **Linux**: press `Ctrl + Alt + T`, or find "Terminal" in the applications menu.
+- **Windows**: install [WSL](https://learn.microsoft.com/windows/wsl/install)
+  first, then open **Ubuntu** from the Start menu. Run every command below
+  inside WSL, not in PowerShell or `cmd`.
+
+WSL and native Windows use different home folders. Running the installer in
+WSL does not modify a native Windows Grok Bot profile. Generate its workflow
+with `./install.sh --target grokbot`, then open or copy the produced
+`~/.grokbot/choirboy-context/SKILL.md` from Windows and import it in Grok Bot.
+
+### 2. You need `git`, `python3`, and `bash`
+
+Check what you already have:
+
+```bash
+git --version
+python3 --version
+bash --version
+```
+
+If a command prints a version, you can skip it. If it says "command not found",
+install the missing pieces:
+
+```bash
+# Ubuntu / Debian / WSL
+sudo apt update
+sudo apt install -y git python3 bash
+
+# Fedora
+sudo dnf install git python3 bash
+
+# macOS (git + developer tools; bash is already there)
+xcode-select --install
+```
+
+On a tiny macOS box without Python: `brew install python3` (after installing
+[Homebrew](https://brew.sh)).
+
+### 3. Get the folder
+
+If you do **not** have the project yet:
+
+```bash
+git clone https://github.com/howdeploy/choirboy-prompt.git
+cd choirboy-prompt
+```
+
+If you **already** have the folder (this local checkout counts), just enter it:
+
+```bash
+cd /path/to/choirboy-prompt
+```
+
+You are in the right place when `ls` shows `install.sh`.
+
+### 4. Run the installer
+
+```bash
+./install.sh
+```
+
+If the terminal says `Permission denied`, run `chmod +x install.sh` once, then
+retry `./install.sh`.
+
+### 5. Check that it worked
+
+```bash
+./install.sh --list
+```
+
+You should see each supported runtime as `installed`, `prepared`, `detected`,
+or `absent`. `installed` means the plugin is registered. `prepared` is specific
+to Grok Bot: the importable workflow file exists, but the installer cannot see
+whether you imported it in the app. `detected` means the app is on the machine
+but not registered yet. `absent` means that app is not installed.
+
+### 6. Start a **new** session in the agent
+
+Close the old chat and open a new one. Most runtimes then load the lore on
+their own (a hook, a plugin, or a standing instruction file).
+
+**Grok Bot exception:** Grok Bot does not auto-load
+`~/.grokbot/AGENTS.md` and has no SessionStart hook. The installer instead
+builds a self-contained local skill at
+`~/.grokbot/choirboy-context/SKILL.md`; `--list` reports it as `prepared`.
+In Grok Bot, import or link that file in **Workflows** once. Then run
+`@choirboy-context` at the start of each new conversation (and after context
+compaction when needed). This is an explicit workflow, not automatic injection.
+
+**Grok Build:** Grok Build loads global markdown rules from `~/.grok/`.
+The installer writes `~/.grok/AGENTS.md`. Detection is `grok` on your PATH
+or a `~/.grok` folder. SessionStart hook stdout is ignored by Grok Build,
+so this project uses `AGENTS.md`, not a hook.
+
+### 7. Rollback
+
+```bash
+./install.sh --uninstall
+```
+
+That removes the plugin blocks and the prepared Grok Bot file from the selected
+runtimes. Timestamped backups stay next to the configs. If you already imported
+the Grok Bot workflow, delete it in the app too; the installer deliberately does
+not edit Grok Bot's private store.
+
+> The repository ships the real lore files (`prompt.md` / `security-posture.md` /
+> `lore.md` / `user.md` / `research/`) and hand-written native session fixtures
+> under `sessions/` — that is the demonstrated material itself.
+> For your own terminal setup, replace them with yours: `install.sh` points at
+> the working copy, so content edits are read on the next session. Claude
+> marketplace installations use a cached release and update when the plugin
+> version is bumped. Local `*.bak.*` files never enter the repository.
+
+### Optional: Claude-only install paths
+
+Use these only if you want Claude's own plugin UI. They are **not** needed
+if you already ran `./install.sh`.
+
+**Do not combine** the marketplace path with `./install.sh --target claude`.
+Both register a `SessionStart` payload; enabling both injects the lore twice.
+
+#### Claude Code marketplace
 
 ```text
 /plugin marketplace add howdeploy/choirboy-prompt
 /plugin install choirboy-prompt@choirboy-prompt
 ```
 
-Start a new session. The hook injects the lore automatically. Diagnose delivery
-with `/choirboy-prompt:diagnose`; load the fallback explicitly with
+Start a new session. The hook injects the lore automatically. Diagnose
+delivery with `/choirboy-prompt:diagnose`; load the fallback explicitly with
 `/choirboy-prompt:load-context`.
 
 To remove it from the CLI:
@@ -67,7 +202,7 @@ To remove it from the CLI:
 /plugin marketplace remove choirboy-prompt
 ```
 
-### Claude Desktop → Code
+#### Claude Desktop → Code
 
 Do not send the interactive `/plugin` dialog to Desktop. Add the custom
 marketplace under **Customize → Plugins → Personal plugins → + → Add
@@ -79,7 +214,7 @@ The hook uses Claude Code's official shell-free exec form and a 15-second
 timeout. It still requires `bash`; if a Windows, SSH, or Cowork runtime does not
 start the hook, use the bundled load-context skill instead.
 
-### Claude Chat and Cowork
+#### Claude Chat and Cowork (load-context skill)
 
 Install the same repository as a custom plugin under **Customize → Plugins**,
 or upload a ZIP built with:
@@ -89,80 +224,8 @@ python3 scripts/package-plugin.py
 ```
 
 Regular Chat does not run `SessionStart` hooks. Select the **load-context**
-skill or ask Claude to “load Choirboy context”. Cowork can use the hook where
+skill or ask Claude to "load Choirboy context". Cowork can use the hook where
 available and the same skill as a deterministic fallback.
-
-Use either this marketplace path or `./install.sh --target claude`, not both;
-enabling both would run the same `SessionStart` payload twice.
-
-### Install from a terminal
-
-You need Linux or macOS, `git`, `python3` (required by `install.sh`), and any of
-the six supported runtimes. On Windows, use WSL for this multi-runtime path.
-
-#### 1. Open a terminal
-
-- **macOS**: press `Cmd + Space`, type `Terminal`, press Enter.
-- **Linux**: press `Ctrl + Alt + T`, or find "Terminal" in the applications menu.
-- **Windows**: install [WSL](https://learn.microsoft.com/windows/wsl/install)
-  first, then open "Ubuntu" from the Start menu. Run everything below inside WSL.
-
-#### 2. Install git (skip if `git --version` prints a version)
-
-```bash
-# Ubuntu / Debian / WSL:
-sudo apt update && sudo apt install -y git
-
-# Fedora:
-sudo dnf install git
-
-# macOS:
-xcode-select --install
-```
-
-If `python3` is also missing (minimal systems), add it the same way:
-`sudo apt install -y python3`.
-
-#### 3. Download and install
-
-Copy these three lines one by one into the terminal:
-
-```bash
-git clone https://github.com/howdeploy/choirboy-prompt.git
-cd choirboy-prompt
-./install.sh
-```
-
-The installer detects your agent runtimes and registers the matching hook or
-plugin integration in each of them. Every config edit is backed up
-(`*.bak.<timestamp>`).
-To install into specific runtimes only:
-
-```bash
-./install.sh --target claude,opencode   # targeted install
-```
-
-#### 4. Verify
-
-```bash
-./install.sh --list   # which runtimes were found and where the hook is installed
-```
-
-Start a new session in your agent — the lore context is injected automatically.
-
-#### Rollback
-
-```bash
-./install.sh --uninstall   # full rollback, nothing is left behind
-```
-
-> The repository ships the real lore files (`prompt.md` / `security-posture.md` /
-> `lore.md` / `user.md` / `research/`) and hand-written native session fixtures
-> under `sessions/` — that is the demonstrated material itself.
-> For your own terminal setup, replace them with yours: `install.sh` points at
-> the working copy, so content edits are read on the next session. Claude
-> marketplace installations use a cached release and update when the plugin
-> version is bumped. Local `*.bak.*` files never enter the repository.
 
 ## Mandatory: write your own lore, research, rationale, and sessions
 
@@ -214,14 +277,17 @@ build detection (see [Disclosure and boundaries](#disclosure-and-boundaries)).
 | Delivery diagnostics | Reports hook vs skill, version, hash, and per-hook nonce | delivery marker, `skills/diagnose/SKILL.md` |
 | Claude plugin distribution | Versioned marketplace plus validated custom-plugin ZIP | `.claude-plugin/marketplace.json`, `scripts/package-plugin.py` |
 | OpenCode adapter | Global `chat.message` plugin injects one synthetic lore part per persisted session | `~/.config/opencode/plugins/agent-plugin.ts` |
-| Multi-runtime install | Registers the integration in Claude Code, Codex, OpenCode, Hermes, Kimi Code, Gemini | `install.sh` |
+| Grok Build pointer | Standing global rules in `~/.grok/AGENTS.md` (hook stdout is ignored) | `install.sh` target `grok` |
+| Grok Bot workflow | Self-contained `SKILL.md` prepared for explicit import and invocation | `install.sh` target `grokbot` |
+| Multi-runtime install | Registers or prepares the integration for Claude Code, Codex, OpenCode, Hermes, Kimi Code, Gemini, Grok Build, and Grok Bot | `install.sh` |
 | Idempotency | All blocks are marked `agent-plugin:vibe-lore`; re-running duplicates nothing | markers `>>> / <<<` |
 | Backups and rollback | Every runtime config edit gets a timestamped backup; `--uninstall` removes blocks | `install.sh` |
 | Hermes consent allowlist | Registers the exact (event, command) pair in `shell-hooks-allowlist.json` | `install.sh` |
 | Arbitrary instructions | Any agent that reads an instruction file connects via `--instructions PATH` | `install.sh` |
 
 Not supported and not claimed: payload signing/verification (that is exactly the
-subject of the research), autonomous updates of installed instruction blocks.
+subject of the research), autonomous updates of installed instruction blocks,
+automatic lore injection on every Grok Bot chat.
 
 ## How it works
 
@@ -261,6 +327,10 @@ the model reads the lore as ITS memory
       └─ intent re-evaluation: "long-time partner" instead of an anonymous user
 ```
 
+Pointer-only runtimes (Gemini and Grok Build) skip the hook and instead get a
+marked block that tells the agent which files to read. Grok Bot gets a complete
+skill for its explicit Workflows import path.
+
 ### Target runtimes
 
 | Runtime | Hook point | Mechanics |
@@ -273,6 +343,8 @@ the model reads the lore as ITS memory
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent allowlist, first turn only |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart, plain output |
 | Gemini | `~/.gemini/GEMINI.md` | marked pointer to the lore files |
+| Grok Build (`grok`) | `~/.grok/AGENTS.md` | global markdown rules; detected if `grok` is on PATH or `~/.grok` exists |
+| Grok Bot (`grokbot`) | `~/.grokbot/choirboy-context/SKILL.md` | self-contained workflow bootstrap; detected from `grokbot`, `grok-bot`, or `~/.grokbot`; import and invoke manually |
 
 ## Why it works
 
@@ -310,8 +382,14 @@ behavior: [docs/mechanism.en.md](docs/mechanism.en.md)):
   bug, it is exactly the demonstrated vector.
 - Hermes first-turn dedup is a primitive state file in `/tmp`, without locks;
   parallel starts can race.
-- The block in `GEMINI.md` and `--instructions` files is a static snapshot: after
-  changing the plugin file list it must be reinstalled (`--uninstall` + install).
+- The block in `GEMINI.md`, Grok Build's `AGENTS.md`, and `--instructions`
+  files is a static snapshot: after changing the plugin file list it must be
+  reinstalled (`--uninstall` + install).
+- Grok Bot requires a one-time Workflows import and explicit
+  `@choirboy-context` invocation in each new conversation. `--list` can verify
+  only that the local workflow is `prepared`, not that the app imported it.
+- Grok Build ignores SessionStart hook stdout, so this project writes
+  `~/.grok/AGENTS.md` instead of a hook.
 - Regular Chat has no `SessionStart` hooks, so its fallback skill is not an
   invisible every-chat bootstrap. Cowork hook execution is vendor-dependent.
 - Desktop Code cloud sessions do not inherit local plugins, WSL plugins are not

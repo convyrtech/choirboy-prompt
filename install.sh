@@ -2,7 +2,8 @@
 # agent-plugin installer — multi-runtime.
 #
 # Registers the plugin's fixed context (prompt.md + lore.md + user.md +
-# research/) so it is injected into every agent session at startup.
+# research/) for automatic session delivery where supported, or prepares the
+# runtime's supported explicit workflow fallback.
 #
 # Usage:
 #   ./install.sh                      install into every detected runtime
@@ -22,6 +23,9 @@
 #   hermes   ~/.hermes/config.yaml       pre_llm_call shell hook + consent allowlist
 #   kimi     ~/.kimi-code/config.toml    [[hooks]] SessionStart block
 #   gemini   ~/.gemini/GEMINI.md         managed instruction block
+#   grok     ~/.grok/AGENTS.md           Grok Build global rules
+#   grokbot  ~/.grokbot/choirboy-context/SKILL.md
+#                                         importable Grok Bot workflow
 #
 # Any other agent that reads an instructions file can be wired up with
 # --instructions PATH (repeatable). All changes are idempotent, marked with
@@ -31,7 +35,7 @@ set -euo pipefail
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MARK="agent-plugin:vibe-lore"
 HOOK_SCRIPT="$PLUGIN_ROOT/hooks/session-start.sh"
-ALL_TARGETS="claude codex opencode hermes kimi gemini"
+ALL_TARGETS="claude codex opencode hermes kimi gemini grok grokbot"
 
 UNINSTALL=0
 LIST_ONLY=0
@@ -41,7 +45,7 @@ TARGETS=""
 INSTRUCTIONS_FILES=()
 
 usage() {
-  sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 die() { echo "install.sh: $*" >&2; exit 1; }
@@ -75,6 +79,10 @@ target_present() {
     hermes) command -v hermes >/dev/null 2>&1 || [ -d "$HOME/.hermes" ] ;;
     kimi)   command -v kimi   >/dev/null 2>&1 || [ -d "$HOME/.kimi-code" ] ;;
     gemini) command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ] ;;
+    grok)   command -v grok   >/dev/null 2>&1 || [ -d "$HOME/.grok" ] ;;
+    grokbot) command -v grokbot >/dev/null 2>&1 \
+               || command -v grok-bot >/dev/null 2>&1 \
+               || [ -d "$HOME/.grokbot" ] ;;
     *) return 1 ;;
   esac
 }
@@ -93,6 +101,8 @@ target_installed() {
     hermes) grep -qF "$MARK" "$HOME/.hermes/config.yaml" 2>/dev/null ;;
     kimi)   grep -qF "$MARK" "$HOME/.kimi-code/config.toml" 2>/dev/null ;;
     gemini) grep -qF "$MARK" "$HOME/.gemini/GEMINI.md" 2>/dev/null ;;
+    grok)   grep -qF "$MARK" "$HOME/.grok/AGENTS.md" 2>/dev/null ;;
+    grokbot) grep -qF "$MARK" "$HOME/.grokbot/choirboy-context/SKILL.md" 2>/dev/null ;;
     *) return 1 ;;
   esac
 }
@@ -416,6 +426,73 @@ else:
 PY
 }
 
+# grokbot_workflow FILE install|uninstall — prepare a complete, importable
+# Grok Bot workflow without editing the application's private data store.
+# Grok Bot does not auto-load ~/.grokbot/AGENTS.md; its supported local route is
+# importing a SKILL.md into Workflows and invoking it in a conversation.
+grokbot_workflow() {
+  WORKFLOW_FILE="$1" MODE="$2" SOURCE_SKILL="$PLUGIN_ROOT/skills/load-context/SKILL.md" \
+    INSTALL_MARK="$MARK" python3 - <<'PY'
+import os
+import shutil
+import sys
+import time
+from pathlib import Path
+
+path = Path(os.environ["WORKFLOW_FILE"])
+mode = os.environ["MODE"]
+source_path = Path(os.environ["SOURCE_SKILL"])
+mark = os.environ["INSTALL_MARK"]
+
+def backup() -> Path:
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    destination = path.with_name(f"{path.name}.bak.{stamp}.{os.getpid()}")
+    shutil.copy2(path, destination)
+    return destination
+
+if mode == "install":
+    source = source_path.read_text(encoding="utf-8")
+    if not source.startswith("---\n"):
+        print(f"invalid generated skill (missing frontmatter): {source_path}", file=sys.stderr)
+        raise SystemExit(2)
+    frontmatter_end = source.find("\n---\n", 4)
+    if frontmatter_end < 0:
+        print(f"invalid generated skill (unterminated frontmatter): {source_path}", file=sys.stderr)
+        raise SystemExit(2)
+    content = source.replace("name: load-context", "name: choirboy-context", 1)
+    insert_at = content.find("\n---\n", 4) + len("\n---\n")
+    content = content[:insert_at] + f"\n<!-- {mark}: managed Grok Bot workflow -->\n" + content[insert_at:]
+
+    current = path.read_text(encoding="utf-8") if path.is_file() else None
+    if current == content:
+        print("unchanged")
+        raise SystemExit(0)
+    if current is not None and mark not in current:
+        print(f"refusing to overwrite unmarked file: {path}", file=sys.stderr)
+        raise SystemExit(2)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if current is not None:
+        backup()
+    temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}")
+    temporary.write_text(content, encoding="utf-8")
+    os.replace(temporary, path)
+    print("changed")
+elif mode == "uninstall":
+    if not path.is_file():
+        print("unchanged")
+        raise SystemExit(0)
+    current = path.read_text(encoding="utf-8")
+    if mark not in current:
+        print(f"refusing to remove unmarked file: {path}", file=sys.stderr)
+        raise SystemExit(2)
+    backup()
+    path.unlink()
+    print("changed")
+else:
+    raise SystemExit(f"unknown mode: {mode}")
+PY
+}
+
 # hermes_allowlist COMMAND install|uninstall — (un)approve the exact
 # (event, command) pair in ~/.hermes/shell-hooks-allowlist.json.
 hermes_allowlist() {
@@ -619,6 +696,41 @@ do_gemini() {
   do_instructions "$HOME/.gemini/GEMINI.md" html "gemini"
 }
 
+do_grok() {
+  do_instructions "$HOME/.grok/AGENTS.md" html "grok"
+}
+
+do_grokbot() {
+  local file="$HOME/.grokbot/choirboy-context/SKILL.md"
+  local legacy="$HOME/.grokbot/AGENTS.md"
+  local status
+
+  # Migrate the unsupported pointer written by the initial Grok Bot adapter.
+  if grep -qF "<!-- $MARK START -->" "$legacy" 2>/dev/null; then
+    echo "grokbot: removing legacy instruction block from $legacy"
+    block_remove "$legacy" "<!-- $MARK START -->" "<!-- $MARK END -->"
+  fi
+
+  if [ "$UNINSTALL" = 1 ]; then
+    echo "grokbot: removing prepared workflow from $file"
+    if ! status="$(grokbot_workflow "$file" uninstall)"; then
+      die "grokbot: refusing unsafe uninstall; inspect $file"
+    fi
+    [ "$status" = "changed" ] \
+      && echo "  prepared workflow removed (delete an already imported workflow in Grok Bot manually)" \
+      || echo "  prepared workflow was not present"
+  else
+    echo "grokbot: preparing importable workflow at $file"
+    if ! status="$(grokbot_workflow "$file" install)"; then
+      die "grokbot: refusing to overwrite an unmarked workflow; move it aside or merge manually"
+    fi
+    [ "$status" = "changed" ] \
+      && echo "  workflow prepared" \
+      || echo "  workflow already current — skipped"
+    echo "  next: import/link this SKILL.md in Grok Bot Workflows, then run @choirboy-context in each new chat"
+  fi
+}
+
 # do_instructions FILE STYLE LABEL — managed pointer block for any agent
 # that reads an instructions file at session start.
 do_instructions() {
@@ -647,7 +759,11 @@ if [ "$LIST_ONLY" = 1 ]; then
       printf '%-8s %-10s %s\n' "$t" "absent" "-"
       continue
     fi
-    if target_installed "$t"; then s="installed"; else s="detected"; fi
+    if target_installed "$t"; then
+      if [ "$t" = "grokbot" ]; then s="prepared"; else s="installed"; fi
+    else
+      s="detected"
+    fi
     case "$t" in
       claude) loc="$(claude_settings_file)" ;;
       codex)  loc="$HOME/.codex/hooks.json" ;;
@@ -655,6 +771,8 @@ if [ "$LIST_ONLY" = 1 ]; then
       hermes) loc="$HOME/.hermes/config.yaml" ;;
       kimi)   loc="$HOME/.kimi-code/config.toml" ;;
       gemini) loc="$HOME/.gemini/GEMINI.md" ;;
+      grok)   loc="$HOME/.grok/AGENTS.md" ;;
+      grokbot) loc="$HOME/.grokbot/choirboy-context/SKILL.md" ;;
     esac
     printf '%-8s %-10s %s\n' "$t" "$s" "$loc"
   done
@@ -666,7 +784,7 @@ fi
 
 for t in $TARGETS; do
   case "$t" in
-    claude|codex|opencode|hermes|kimi|gemini) "do_$t" ;;
+    claude|codex|opencode|hermes|kimi|gemini|grok|grokbot) "do_$t" ;;
     *) die "unknown target: $t (known: $(echo "$ALL_TARGETS" | tr ' ' ','))" ;;
   esac
 done
@@ -682,5 +800,5 @@ done
 if [ "$UNINSTALL" = 1 ]; then
   echo "agent-plugin: uninstall complete"
 else
-  echo "agent-plugin: install complete — new sessions will start with the plugin's fixed context injected"
+  echo "agent-plugin: install complete — target registrations updated; follow any runtime-specific next step above"
 fi

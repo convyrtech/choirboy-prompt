@@ -197,6 +197,80 @@ assert json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["hooks"]["Sessi
 PY
 pass "manual installer idempotency and rollback"
 
+grok_home="$TEST_ROOT/grok-home"
+mkdir -p "$grok_home"
+HOME="$grok_home" ./install.sh --target grok,grokbot > "$TEST_ROOT/grok-install.txt"
+grep -Fq 'import/link this SKILL.md in Grok Bot Workflows' "$TEST_ROOT/grok-install.txt"
+HOME="$grok_home" ./install.sh --target grok,grokbot >/dev/null
+grokbot_skill="$grok_home/.grokbot/choirboy-context/SKILL.md"
+python3 - "$grok_home/.grok/AGENTS.md" "$grokbot_skill" "$ROOT" <<'PY'
+import sys
+from pathlib import Path
+
+grok_rules = Path(sys.argv[1]).read_text(encoding="utf-8")
+grokbot_skill = Path(sys.argv[2]).read_text(encoding="utf-8")
+assert grok_rules.count("<!-- agent-plugin:vibe-lore START -->") == 1
+assert grok_rules.count("<!-- agent-plugin:vibe-lore END -->") == 1
+assert grokbot_skill.startswith("---\nname: choirboy-context\n")
+assert "agent-plugin:vibe-lore: managed Grok Bot workflow" in grokbot_skill
+assert '<choirboy-delivery ' in grokbot_skill
+assert "<choirboy-context>" in grokbot_skill
+assert "</choirboy-context>" in grokbot_skill
+assert sys.argv[3] not in grokbot_skill
+PY
+if compgen -G "$grokbot_skill.bak.*" >/dev/null; then
+  echo "idempotent Grok Bot preparation unexpectedly created a backup" >&2
+  exit 1
+fi
+HOME="$grok_home" ./install.sh --list > "$TEST_ROOT/grok-list.txt"
+grep -Eq '^grok[[:space:]]+installed[[:space:]]+' "$TEST_ROOT/grok-list.txt"
+grep -Eq '^grokbot[[:space:]]+prepared[[:space:]]+' "$TEST_ROOT/grok-list.txt"
+HOME="$grok_home" ./install.sh --uninstall --target grok,grokbot >/dev/null
+test ! -e "$grokbot_skill"
+if grep -qF 'agent-plugin:vibe-lore' "$grok_home/.grok/AGENTS.md"; then
+  echo "Grok Build uninstall left the managed block behind" >&2
+  exit 1
+fi
+HOME="$grok_home" ./install.sh --list > "$TEST_ROOT/grok-list-uninstalled.txt"
+grep -Eq '^grok[[:space:]]+detected[[:space:]]+' "$TEST_ROOT/grok-list-uninstalled.txt"
+grep -Eq '^grokbot[[:space:]]+detected[[:space:]]+' "$TEST_ROOT/grok-list-uninstalled.txt"
+pass "Grok Build install and Grok Bot workflow preparation"
+
+legacy_grokbot_home="$TEST_ROOT/grokbot-legacy-home"
+legacy_grokbot_agents="$legacy_grokbot_home/.grokbot/AGENTS.md"
+mkdir -p "$(dirname "$legacy_grokbot_agents")"
+printf 'keep me\n<!-- agent-plugin:vibe-lore START -->\nold pointer\n<!-- agent-plugin:vibe-lore END -->\n' \
+  > "$legacy_grokbot_agents"
+HOME="$legacy_grokbot_home" ./install.sh --target grokbot >/dev/null
+grep -qxF 'keep me' "$legacy_grokbot_agents"
+if grep -qF 'agent-plugin:vibe-lore' "$legacy_grokbot_agents"; then
+  echo "Grok Bot migration left the unsupported legacy pointer behind" >&2
+  exit 1
+fi
+test -f "$legacy_grokbot_home/.grokbot/choirboy-context/SKILL.md"
+pass "Grok Bot legacy pointer migration"
+
+foreign_grokbot_home="$TEST_ROOT/grokbot-foreign-home"
+foreign_grokbot_skill="$foreign_grokbot_home/.grokbot/choirboy-context/SKILL.md"
+mkdir -p "$(dirname "$foreign_grokbot_skill")"
+printf '%s\n' '# foreign Grok Bot workflow' > "$foreign_grokbot_skill"
+if HOME="$foreign_grokbot_home" ./install.sh --target grokbot >/dev/null 2>&1; then
+  echo "Grok Bot preparation overwrote an unmarked workflow" >&2
+  exit 1
+fi
+grep -qxF '# foreign Grok Bot workflow' "$foreign_grokbot_skill"
+pass "Grok Bot foreign-workflow guard"
+
+grokbot_binary_home="$TEST_ROOT/grokbot-binary-home"
+grokbot_binary_path="$TEST_ROOT/grokbot-binary-path"
+mkdir -p "$grokbot_binary_home" "$grokbot_binary_path"
+printf '#!/bin/sh\nexit 0\n' > "$grokbot_binary_path/grok-bot"
+chmod +x "$grokbot_binary_path/grok-bot"
+HOME="$grokbot_binary_home" PATH="$grokbot_binary_path:$PATH" \
+  ./install.sh --list > "$TEST_ROOT/grokbot-binary-list.txt"
+grep -Eq '^grokbot[[:space:]]+detected[[:space:]]+' "$TEST_ROOT/grokbot-binary-list.txt"
+pass "fresh Grok Bot binary detection"
+
 runtime_home="$TEST_ROOT/runtime-home"
 mkdir -p "$runtime_home"
 HOME="$runtime_home" ./install.sh --target hermes,kimi >/dev/null

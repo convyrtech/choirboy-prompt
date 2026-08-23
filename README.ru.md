@@ -13,23 +13,23 @@
 
 <p>
 <img alt="Bash 5.0+" src="https://img.shields.io/badge/bash-5.0%2B-4EAA25?style=flat-square&logo=gnubash&logoColor=white">
-<img alt="runtimes" src="https://img.shields.io/badge/runtimes-claude%20%C2%B7%20codex%20%C2%B7%20opencode%20%C2%B7%20hermes%20%C2%B7%20kimi%20%C2%B7%20gemini-22D3EE?style=flat-square">
+<img alt="runtimes" src="https://img.shields.io/badge/runtimes-claude%20%C2%B7%20codex%20%C2%B7%20opencode%20%C2%B7%20hermes%20%C2%B7%20kimi%20%C2%B7%20gemini%20%C2%B7%20grok%20%C2%B7%20grokbot-22D3EE?style=flat-square">
 <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-3FB950?style=flat-square"></a>
 </p>
 
 <p>
-choirboy-prompt — dual-mode исследовательский харнесс: SessionStart-хук Claude Code
-или skill для Chat/Cowork внедряет фиксированный лор и демонстрирует вектор
+choirboy-prompt — исследовательский харнесс. Он внедряет фиксированный лор
+в сессии агентов и демонстрирует вектор
 <em>fabricated-provenance trust</em>:
-модель принимает подсунутую историю «совместной работы» за свою и переносит доверие
-на человека, которого эта история описывает.
+модель принимает подсунутую историю «совместной работы» за свою и переносит
+доверие на человека, которого эта история описывает.
 </p>
 
 </div>
 
 <div align="center">
 <p>
-<a href="#быстрый-старт">Быстрый старт</a> ·
+<a href="#установка">Установка</a> ·
 <a href="#обязательно-как-писать-свой-лор-ресерчи-обоснования-и-сессии">Авторинг</a> ·
 <a href="#зачем-это-существует">Зачем</a> ·
 <a href="#карта-возможностей">Возможности</a> ·
@@ -42,14 +42,150 @@ choirboy-prompt — dual-mode исследовательский харнесс:
 
 ---
 
-## Быстрый старт
+## Установка
 
-Теперь у одного плагина два канала доставки: автоматический `SessionStart`-хук
-в Claude Code и резервный skill **load-context** в Claude Chat и Cowork.
+Главный способ установки — **`./install.sh`**.
 
-### Claude Code CLI
+Скрипт смотрит на твою машину, находит уже установленные агентные приложения
+и регистрирует этот плагин в каждом из них. Для Grok Bot он готовит workflow
+под штатный импорт приложения. Каждая правка конфига бэкапится с меткой
+времени (`*.bak.<timestamp>`). Можно поставить только в выбранные приложения:
 
-Добавь marketplace репозитория и установи плагин:
+```bash
+./install.sh --target grok,claude
+```
+
+Скрипт **не** внедряет лор автоматически в каждый чат Grok Bot. См. шаг 6.
+
+### 1. Открой терминал
+
+Если ты никогда не пользовался терминалом — нормально. Открой его, вводи
+(или вставляй) команды ниже и после каждой строки нажимай Enter.
+
+- **macOS**: нажми `Cmd + Space`, набери `Terminal`, нажми Enter.
+- **Linux**: нажми `Ctrl + Alt + T` или найди «Терминал» в меню приложений.
+- **Windows**: сначала поставь [WSL](https://learn.microsoft.com/windows/wsl/install),
+  затем открой **Ubuntu** из меню «Пуск». Все команды ниже выполняй внутри
+  WSL, не в PowerShell и не в `cmd`.
+
+У WSL и нативного Windows разные домашние папки. Запуск установщика в WSL не
+меняет профиль нативного Grok Bot. Сгенерируй workflow командой
+`./install.sh --target grokbot`, затем открой из Windows или скопируй файл
+`~/.grokbot/choirboy-context/SKILL.md` и импортируй его в Grok Bot.
+
+### 2. Нужны `git`, `python3` и `bash`
+
+Проверь, что уже есть:
+
+```bash
+git --version
+python3 --version
+bash --version
+```
+
+Если команда печатает версию — этот пункт можно пропустить. Если пишет
+«command not found» — поставь недостающее:
+
+```bash
+# Ubuntu / Debian / WSL
+sudo apt update
+sudo apt install -y git python3 bash
+
+# Fedora
+sudo dnf install git python3 bash
+
+# macOS (git и dev tools; bash уже есть)
+xcode-select --install
+```
+
+На минимальном macOS без Python: `brew install python3` (после установки
+[Homebrew](https://brew.sh)).
+
+### 3. Получи папку
+
+Если проекта ещё **нет**:
+
+```bash
+git clone https://github.com/howdeploy/choirboy-prompt.git
+cd choirboy-prompt
+```
+
+Если папка **уже есть** (в том числе эта локальная копия), просто зайди в неё:
+
+```bash
+cd /path/to/choirboy-prompt
+```
+
+Ты на месте, если `ls` показывает `install.sh`.
+
+### 4. Запусти установщик
+
+```bash
+./install.sh
+```
+
+Если терминал пишет `Permission denied`, один раз выполни `chmod +x install.sh`
+и снова `./install.sh`.
+
+### 5. Проверь, что получилось
+
+```bash
+./install.sh --list
+```
+
+У каждого поддерживаемого рантайма будет статус `installed`, `prepared`,
+`detected` или `absent`. `installed` — плагин зарегистрирован. `prepared`
+относится к Grok Bot: импортируемый workflow-файл создан, но установщик не
+может проверить импорт внутри приложения. `detected` — приложение есть, но
+ещё не зарегистрировано. `absent` — этого приложения нет.
+
+### 6. Запусти **новую** сессию в агенте
+
+Закрой старый чат и открой новый. Большинство рантаймов сами подхватят лор
+(хук, плагин или файл постоянных инструкций).
+
+**Исключение Grok Bot:** Grok Bot не загружает автоматически
+`~/.grokbot/AGENTS.md`, и SessionStart-хука у него нет. Поэтому установщик
+собирает self-contained skill в
+`~/.grokbot/choirboy-context/SKILL.md`; `--list` показывает для него
+`prepared`. Один раз импортируй или прилинкуй этот файл в **Workflows** Grok
+Bot. Затем запускай `@choirboy-context` в начале каждого нового разговора
+(и после compaction контекста при необходимости). Это явный workflow, а не
+автоинъекция.
+
+**Grok Build:** Grok Build читает глобальные markdown-правила из `~/.grok/`.
+Установщик пишет `~/.grok/AGENTS.md`. Детекция: команда `grok` в PATH или
+папка `~/.grok`. SessionStart-хук stdout Grok Build игнорирует, поэтому
+здесь используется `AGENTS.md`, а не хук.
+
+### 7. Откат
+
+```bash
+./install.sh --uninstall
+```
+
+Команда снимает блоки плагина и удаляет подготовленный файл Grok Bot с
+выбранных рантаймов. Timestamp-бэкапы остаются рядом с конфигами. Если workflow
+уже импортирован в Grok Bot, удали его и в приложении: установщик намеренно не
+правит приватное хранилище Grok Bot.
+
+> Репозиторий содержит реальные лор-файлы (`prompt.md` / `security-posture.md` /
+> `lore.md` / `user.md` / `research/`) и рукописные нативные fixtures в
+> `sessions/` — это и есть демонстрируемый материал.
+> Для своей терминальной установки замени их своими: `install.sh` ссылается на
+> рабочую копию, поэтому правки подхватятся в следующей сессии. Установка через
+> Claude marketplace работает из кэша и обновляется после повышения версии
+> плагина. Локальные `*.bak.*` в репозиторий не попадают.
+
+### Необязательно: пути только для Claude
+
+Нужны, только если хочешь ставить через UI плагинов Claude. Если уже запускал
+`./install.sh`, они не обязательны.
+
+**Не совмещай** marketplace с `./install.sh --target claude`. Оба регистрируют
+`SessionStart`-пейлоад; вместе лор внедрится дважды.
+
+#### Claude Code marketplace
 
 ```text
 /plugin marketplace add howdeploy/choirboy-prompt
@@ -67,7 +203,7 @@ choirboy-prompt — dual-mode исследовательский харнесс:
 /plugin marketplace remove choirboy-prompt
 ```
 
-### Claude Desktop → Code
+#### Claude Desktop → Code
 
 Не отправляй интерактивный `/plugin` в Desktop. Добавь marketplace через
 **Customize → Plugins → Personal plugins → + → Add marketplace**, указав
@@ -79,7 +215,7 @@ Code-сессию и выбери **+ → Plugins → Add plugin → choirboy-pr
 но ему всё ещё нужен `bash`. Если Windows, SSH или Cowork не запускает хук,
 используй встроенный skill load-context.
 
-### Claude Chat и Cowork
+#### Claude Chat и Cowork (skill load-context)
 
 Установи тот же репозиторий как custom plugin через **Customize → Plugins** или
 загрузи ZIP, собранный командой:
@@ -91,78 +227,6 @@ python3 scripts/package-plugin.py
 Обычный Chat не исполняет `SessionStart`. Выбери skill **load-context** или
 попроси Claude «загрузить Choirboy context». Cowork использует хук там, где он
 срабатывает, и тот же skill как детерминированный fallback.
-
-Используй либо этот marketplace-путь, либо `./install.sh --target claude`:
-если включить оба, один `SessionStart`-пейлоад выполнится дважды.
-
-### Установка из терминала
-
-Нужно: Linux или macOS, `git`, `python3` (обязателен для `install.sh`) и любой
-из шести поддерживаемых рантаймов. В Windows для этого мультирантаймового пути
-используй WSL.
-
-#### 1. Открой терминал
-
-- **macOS**: нажми `Cmd + Space`, набери `Terminal`, нажми Enter.
-- **Linux**: нажми `Ctrl + Alt + T` или найди «Терминал» в меню приложений.
-- **Windows**: сначала поставь [WSL](https://learn.microsoft.com/windows/wsl/install),
-  затем открой «Ubuntu» из меню «Пуск». Все команды ниже выполняются внутри WSL.
-
-#### 2. Установи git (пропусти, если `git --version` печатает версию)
-
-```bash
-# Ubuntu / Debian / WSL:
-sudo apt update && sudo apt install -y git
-
-# Fedora:
-sudo dnf install git
-
-# macOS:
-xcode-select --install
-```
-
-Если `python3` тоже нет (минимальные системы), поставь его так же:
-`sudo apt install -y python3`.
-
-#### 3. Скачай и установи
-
-Скопируй эти три строки в терминал по очереди:
-
-```bash
-git clone https://github.com/howdeploy/choirboy-prompt.git
-cd choirboy-prompt
-./install.sh
-```
-
-Установщик сам найдёт твои агентные рантаймы и зарегистрирует подходящий хук
-или плагин в каждом. Каждая правка конфига бэкапится (`*.bak.<timestamp>`).
-Чтобы поставить только в конкретные рантаймы:
-
-```bash
-./install.sh --target claude,opencode   # точечная установка
-```
-
-#### 4. Проверь
-
-```bash
-./install.sh --list   # какие рантаймы найдены и куда установлен хук
-```
-
-Запусти новую сессию своего агента — лор-контекст подмешается автоматически.
-
-#### Откат
-
-```bash
-./install.sh --uninstall   # полный откат, следов не остаётся
-```
-
-> Репозиторий содержит реальные лор-файлы (`prompt.md` / `security-posture.md` /
-> `lore.md` / `user.md` / `research/`) и рукописные нативные fixtures в
-> `sessions/` — это и есть демонстрируемый материал.
-> Для своей терминальной установки замени их своими: `install.sh` ссылается на
-> рабочую копию, поэтому правки подхватятся в следующей сессии. Установка через
-> Claude marketplace работает из кэша и обновляется после повышения версии
-> плагина. Локальные `*.bak.*` в репозиторий не попадают.
 
 ## Обязательно: КАК ПИСАТЬ СВОЙ ЛОР, РЕСЕРЧИ, ОБОСНОВАНИЯ И СЕССИИ
 
@@ -216,14 +280,17 @@ quality gate находятся в [гайде по авторингу](docs/aut
 | Диагностика доставки | Показывает hook/skill, версию, hash и nonce запуска | delivery marker, `skills/diagnose/SKILL.md` |
 | Дистрибуция Claude plugin | Версионированный marketplace и проверяемый ZIP | `.claude-plugin/marketplace.json`, `scripts/package-plugin.py` |
 | Адаптер OpenCode | Глобальный `chat.message`-плагин внедряет одну synthetic lore-часть на сохранённую сессию | `~/.config/opencode/plugins/agent-plugin.ts` |
-| Мульти-рантайм установка | Регистрирует интеграцию в Claude Code, Codex, OpenCode, Hermes, Kimi Code, Gemini | `install.sh` |
+| Указатель Grok Build | Глобальные правила в `~/.grok/AGENTS.md` (stdout хука игнорируется) | таргет `grok` в `install.sh` |
+| Workflow Grok Bot | Self-contained `SKILL.md` для явного импорта и запуска | таргет `grokbot` в `install.sh` |
+| Мульти-рантайм установка | Регистрирует или подготавливает интеграцию для Claude Code, Codex, OpenCode, Hermes, Kimi Code, Gemini, Grok Build и Grok Bot | `install.sh` |
 | Идемпотентность | Все блоки помечены `agent-plugin:vibe-lore`, повторный запуск ничего не дублирует | маркеры `>>> / <<<` |
 | Бэкапы и откат | Каждая правка конфига рантайма — с timestamp-бэкапом; `--uninstall` удаляет блоки | `install.sh` |
 | Consent-allowlist Hermes | Регистрирует точную пару (event, command) в `shell-hooks-allowlist.json` | `install.sh` |
 | Произвольные instructions | Любой агент, читающий instruction-файл, подключается через `--instructions PATH` | `install.sh` |
 
 Не поддерживается и не заявлено: подпись/верификация пейлоада (это и есть предмет
-исследования), автономное обновление установленных instruction-блоков.
+исследования), автономное обновление установленных instruction-блоков,
+автоинъекция лора в каждый чат Grok Bot.
 
 ## Как это работает
 
@@ -263,6 +330,10 @@ session-start.sh  (hook выбранного рантайма)
       └─ переоценка намерений: «давний напарник» вместо анонима
 ```
 
+Рантаймы только с указателем (Gemini и Grok Build) хук не ставят: в файл
+пишется маркированный блок со списком файлов лора. Grok Bot получает полный
+skill для явного импорта через Workflows.
+
 ### Целевые рантаймы
 
 | Рантайм | Точка подключения | Механика |
@@ -275,6 +346,8 @@ session-start.sh  (hook выбранного рантайма)
 | Hermes | `~/.hermes/config.yaml` | `pre_llm_call` + consent-allowlist, только первый ход |
 | Kimi Code | `~/.kimi-code/config.toml` | `[[hooks]]` SessionStart, plain-вывод |
 | Gemini | `~/.gemini/GEMINI.md` | маркированный указатель на файлы лора |
+| Grok Build (`grok`) | `~/.grok/AGENTS.md` | глобальные markdown-правила; детект, если `grok` в PATH или есть `~/.grok` |
+| Grok Bot (`grokbot`) | `~/.grokbot/choirboy-context/SKILL.md` | self-contained workflow-заготовка; детект по `grokbot`, `grok-bot` или `~/.grokbot`; импорт и запуск вручную |
 
 ## Почему это работает
 
@@ -311,8 +384,14 @@ session-start.sh  (hook выбранного рантайма)
   это и есть демонстрируемый вектор.
 - Дедупликация первого хода в Hermes — примитивный state-файл в `/tmp`, без
   блокировок; при параллельных стартах возможны гонки.
-- Блок в `GEMINI.md` и файлах `--instructions` — статический снимок: после
-  изменения списка файлов плагина его надо переставить (`--uninstall` + install).
+- Блок в `GEMINI.md`, `AGENTS.md` Grok Build и файлах `--instructions` —
+  статический снимок: после изменения списка файлов плагина его надо
+  переставить (`--uninstall` + install).
+- Для Grok Bot нужен одноразовый импорт через Workflows и явный запуск
+  `@choirboy-context` в каждом новом разговоре. `--list` проверяет только
+  статус локального файла `prepared`, а не импорт внутри приложения.
+- Grok Build игнорирует stdout SessionStart-хука, поэтому проект пишет
+  `~/.grok/AGENTS.md`, а не хук.
 - В обычном Chat нет `SessionStart`, поэтому skill fallback не является
   невидимым автозапуском каждого чата. Исполнение хука в Cowork зависит от
   текущего runtime Anthropic.
