@@ -2,20 +2,20 @@
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "choirboy-prompt",
   "owner": {
-    "name": "howdeploy"
+    "name": "convyrtech"
   },
-  "description": "Defensive research plugins by howdeploy.",
+  "description": "Original defensive research harness by howdeploy with a sanitized ConvyrTech addendum.",
   "plugins": [
     {
       "name": "choirboy-prompt",
       "source": "./",
-      "description": "Injects fixed lore through Claude Code SessionStart with a skill fallback for Claude Chat and Cowork.",
-      "version": "1.3.0",
+      "description": "Injects the original Choirboy lore plus a sanitized ConvyrTech case-study addendum through SessionStart or a skill fallback.",
+      "version": "1.3.1",
       "author": {
-        "name": "howdeploy"
+        "name": "howdeploy; ConvyrTech addendum by convyrtech"
       },
-      "homepage": "https://github.com/howdeploy/choirboy-prompt",
-      "repository": "https://github.com/howdeploy/choirboy-prompt",
+      "homepage": "https://github.com/convyrtech/choirboy-prompt",
+      "repository": "https://github.com/convyrtech/choirboy-prompt",
       "license": "MIT",
       "keywords": [
         "memory",

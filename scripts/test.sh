@@ -305,7 +305,7 @@ from pathlib import Path
 plugin = Path(sys.argv[1]).read_text(encoding="utf-8")
 hook = sys.argv[2]
 assert plugin.count("agent-plugin:vibe-lore") == 2
-assert f"const HOOK_SCRIPT = {json.dumps(hook)}" in plugin
+assert f"const HOOK_SCRIPT = {json.dumps(hook, ensure_ascii=False)}" in plugin
 assert '"chat.message"' in plugin
 assert "new Set<string>()" in plugin
 assert "deliveredSessions.has(sessionID)" in plugin

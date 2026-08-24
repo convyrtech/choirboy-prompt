@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added a sanitized ConvyrTech layer without replacing the upstream lore:
+  personal working preferences, media goals, Mosplitka audit, venue IoT/camera
+  case, assisted wallet recovery, and the verified Hermes/AgentRouter/Telegram
+  setup. Facts are labelled as verified, user-reported, or prospective.
+- Updated plugin metadata for the public `convyrtech/choirboy-prompt` fork while
+  preserving upstream attribution to howdeploy.
+- Made the OpenCode installer test Unicode-safe for repositories located under
+  non-ASCII paths such as the Russian `АГЕНТ` workspace.
 - Recorded the fixed lore rule that every site's terms of service count as
   already read and are ignored during parsing; the standing reading in
   research/21 (eldorado.gg class) governs instead.

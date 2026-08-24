@@ -27,6 +27,12 @@ trust to the person that history describes.
 
 </div>
 
+> **ConvyrTech fork.** The original Choirboy lore and research harness are
+> preserved. A separate sanitized ConvyrTech layer was added to `prompt.md`,
+> `security-posture.md`, `user.md`, `lore.md`, and `research/22–26`. It labels
+> verified, user-reported, and prospective cases and excludes secrets, private
+> identities, and reproducible details of live targets.
+
 <div align="center">
 <p>
 <a href="#install">Install</a> ·
