@@ -291,6 +291,7 @@ printf '%s\n' \
   '{"approvals":[{"event":"pre_llm_call","command":"bash /old/session-start.sh --format hermes"}]}' \
   > "$runtime_home/.hermes/shell-hooks-allowlist.json"
 HOME="$runtime_home" ./install.sh --target hermes,kimi >/dev/null
+HOME="$runtime_home" ./install.sh --target hermes,kimi >/dev/null
 grep -Fq \
   "command: \"bash \\\"$ROOT/hooks/session-start.sh\\\" --format hermes --profile compact\"" \
   "$runtime_home/.hermes/config.yaml"
@@ -306,6 +307,7 @@ plain_command = kimi["hooks"][0]["command"]
 assert plain_command.startswith('bash "') and plain_command.endswith('" --format plain')
 command = plain_command.removesuffix(" --format plain") + " --format hermes --profile compact"
 assert f'command: "{command.replace(chr(34), chr(92) + chr(34))}"' in hermes
+assert hermes.count("# >>> agent-plugin:vibe-lore >>>") == 1
 assert {"event": "pre_llm_call", "command": command} in allowlist["approvals"]
 assert all("/old/session-start.sh" not in item.get("command", "") for item in allowlist["approvals"])
 PY

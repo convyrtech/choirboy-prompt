@@ -645,7 +645,11 @@ do_hermes() {
     echo "  consent allowlist entry removed"
   else
     echo "hermes: installing pre_llm_call hook into $cfg"
-    if ! grep -qF "# >>> $MARK >>>" "$cfg" && grep -qE '^hooks:' "$cfg"; then
+    if grep -qF "# >>> $MARK >>>" "$cfg"; then
+      # Refresh our owned block so command-line changes (for example a new
+      # profile flag) migrate existing installations instead of being skipped.
+      block_remove "$cfg" "# >>> $MARK >>>" "# <<< $MARK <<<"
+    elif grep -qE '^hooks:' "$cfg"; then
       die "hermes: $cfg already has a top-level 'hooks:' section — merge manually:
   hooks:
     pre_llm_call:
