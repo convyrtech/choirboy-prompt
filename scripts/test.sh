@@ -126,6 +126,20 @@ assert "# Prompt — правила работы агента" not in context
 PY
 pass "Hermes compact profile"
 
+auto_sid="auto-$$-$(date +%s)"
+printf '{"session_id":"%s","extra":{"is_first_turn":true}}' "$auto_sid" \
+  | ANTHROPIC_BASE_URL="https://agentrouter.org/" \
+    bash hooks/session-start.sh --format hermes > "$TEST_ROOT/hermes-auto.json"
+python3 - "$TEST_ROOT/hermes-auto.json" <<'PY'
+import json, sys
+from pathlib import Path
+
+context = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["context"]
+assert "# ConvyrTech — компактный профиль для Hermes" in context
+assert "# Prompt — правила работы агента" not in context
+PY
+pass "AgentRouter auto-selects compact profile"
+
 python_path="$TEST_ROOT/python-bin"
 mkdir -p "$python_path"
 for command in cat date dirname head mkdir mv python3 sed tail; do

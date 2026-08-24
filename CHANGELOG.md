@@ -4,8 +4,9 @@
 
 - Added a `--profile compact` hook payload for Hermes and strict providers.
   The Hermes installer selects it automatically, while Claude Code keeps the
-  complete upstream-plus-ConvyrTech context unchanged. The installer now also
-  refreshes its managed config block and migrates stale allowlist commands
+  complete upstream-plus-ConvyrTech context on direct providers and
+  automatically selects the compact profile on AgentRouter. The installer now
+  also refreshes its managed config block and migrates stale allowlist commands
   instead of silently keeping them.
 - Added a sanitized ConvyrTech layer without replacing the upstream lore:
   personal working preferences, media goals, Mosplitka audit, venue IoT/camera

@@ -12,14 +12,15 @@
 #   --format hermes   Hermes shell-hook protocol (pre_llm_call): reads the
 #                     JSON payload from stdin, injects only on the first turn
 #                     of a session, answers {"context": ...} or {}.
-#   --profile full    Use the complete canonical Choirboy context (default).
+#   --profile auto    Compact on AgentRouter, otherwise full (default).
+#   --profile full    Use the complete canonical Choirboy context.
 #   --profile compact Use the small provider-compatible ConvyrTech profile.
 set -euo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 FORMAT="claude"
-PROFILE="full"
+PROFILE="auto"
 while [ $# -gt 0 ]; do
   case "$1" in
     --format) FORMAT="${2:?--format requires a value}"; shift ;;
@@ -32,6 +33,13 @@ done
 
 VERSION="$(sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p' \
   "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | head -n1)"
+
+if [ "$PROFILE" = "auto" ]; then
+  case "${ANTHROPIC_BASE_URL:-}" in
+    *agentrouter.org*) PROFILE="compact" ;;
+    *) PROFILE="full" ;;
+  esac
+fi
 
 case "$PROFILE" in
   full)
