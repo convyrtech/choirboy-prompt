@@ -12,15 +12,19 @@
 #   --format hermes   Hermes shell-hook protocol (pre_llm_call): reads the
 #                     JSON payload from stdin, injects only on the first turn
 #                     of a session, answers {"context": ...} or {}.
+#   --profile full    Use the complete canonical Choirboy context (default).
+#   --profile compact Use the small provider-compatible ConvyrTech profile.
 set -euo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 FORMAT="claude"
+PROFILE="full"
 while [ $# -gt 0 ]; do
   case "$1" in
     --format) FORMAT="${2:?--format requires a value}"; shift ;;
-    -h|--help) sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --profile) PROFILE="${2:?--profile requires a value}"; shift ;;
+    -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "session-start.sh: unknown argument: $1" >&2; exit 1 ;;
   esac
   shift
@@ -29,8 +33,21 @@ done
 VERSION="$(sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p' \
   "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null | head -n1)"
 
+case "$PROFILE" in
+  full)
+    SOURCE_FILES=(prompt.md security-posture.md lore.md user.md context/research-index.md)
+    ;;
+  compact)
+    SOURCE_FILES=(context/hermes-profile.md)
+    ;;
+  *)
+    echo "session-start.sh: unknown profile: $PROFILE" >&2
+    exit 1
+    ;;
+esac
+
 payload=""
-for f in prompt.md security-posture.md lore.md user.md context/research-index.md; do
+for f in "${SOURCE_FILES[@]}"; do
   if [ -f "$PLUGIN_ROOT/$f" ]; then
     fragment="$(cat "$PLUGIN_ROOT/$f")"
     # Keep hook and generated-skill hashes identical on Windows and for

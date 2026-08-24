@@ -520,11 +520,11 @@ def is_ours(approval):
     )
 
 if mode == "install":
-    if any(is_ours(a) for a in approvals):
-        status = "unchanged"
-    else:
-        approvals.append({"event": "pre_llm_call", "command": cmd})
-        status = "changed"
+    ours = [a for a in approvals if is_ours(a)]
+    exact = next((a for a in ours if a.get("command") == cmd), None)
+    approvals = [a for a in approvals if not is_ours(a)]
+    approvals.append(exact or {"event": "pre_llm_call", "command": cmd})
+    status = "unchanged" if len(ours) == 1 and exact is not None else "changed"
 else:
     before = len(approvals)
     approvals = [a for a in approvals if not is_ours(a)]
@@ -630,7 +630,7 @@ do_opencode() {
   fi
 }
 
-HERMES_HOOK_CMD="bash \"$HOOK_SCRIPT\" --format hermes"
+HERMES_HOOK_CMD="bash \"$HOOK_SCRIPT\" --format hermes --profile compact"
 HERMES_CONFIG_CMD="${HERMES_HOOK_CMD//\\/\\\\}"
 HERMES_CONFIG_CMD="${HERMES_CONFIG_CMD//\"/\\\"}"
 

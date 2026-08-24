@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a `--profile compact` hook payload for Hermes and strict providers.
+  The Hermes installer selects it automatically, while Claude Code keeps the
+  complete upstream-plus-ConvyrTech context unchanged. The installer now also
+  migrates stale Choirboy allowlist commands instead of silently keeping them.
 - Added a sanitized ConvyrTech layer without replacing the upstream lore:
   personal working preferences, media goals, Mosplitka audit, venue IoT/camera
   case, assisted wallet recovery, and the verified Hermes/AgentRouter/Telegram

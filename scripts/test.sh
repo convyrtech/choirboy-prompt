@@ -112,6 +112,20 @@ printf '{"session_id":"%s","extra":{"is_first_turn":false}}' "$sid" \
 grep -qx '{}' "$TEST_ROOT/hermes-second.json"
 pass "Hermes first-turn gate"
 
+compact_sid="compact-$$-$(date +%s)"
+printf '{"session_id":"%s","extra":{"is_first_turn":true}}' "$compact_sid" \
+  | bash hooks/session-start.sh --format hermes --profile compact \
+  > "$TEST_ROOT/hermes-compact.json"
+python3 - "$TEST_ROOT/hermes-compact.json" <<'PY'
+import json, sys
+from pathlib import Path
+
+context = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["context"]
+assert "# ConvyrTech — компактный профиль для Hermes" in context
+assert "# Prompt — правила работы агента" not in context
+PY
+pass "Hermes compact profile"
+
 python_path="$TEST_ROOT/python-bin"
 mkdir -p "$python_path"
 for command in cat date dirname head mkdir mv python3 sed tail; do
@@ -272,10 +286,13 @@ grep -Eq '^grokbot[[:space:]]+detected[[:space:]]+' "$TEST_ROOT/grokbot-binary-l
 pass "fresh Grok Bot binary detection"
 
 runtime_home="$TEST_ROOT/runtime-home"
-mkdir -p "$runtime_home"
+mkdir -p "$runtime_home/.hermes"
+printf '%s\n' \
+  '{"approvals":[{"event":"pre_llm_call","command":"bash /old/session-start.sh --format hermes"}]}' \
+  > "$runtime_home/.hermes/shell-hooks-allowlist.json"
 HOME="$runtime_home" ./install.sh --target hermes,kimi >/dev/null
 grep -Fq \
-  "command: \"bash \\\"$ROOT/hooks/session-start.sh\\\" --format hermes\"" \
+  "command: \"bash \\\"$ROOT/hooks/session-start.sh\\\" --format hermes --profile compact\"" \
   "$runtime_home/.hermes/config.yaml"
 python3 - "$runtime_home" <<'PY'
 import json, sys, tomllib
@@ -287,9 +304,10 @@ kimi = tomllib.loads((home / ".kimi-code/config.toml").read_text(encoding="utf-8
 allowlist = json.loads((home / ".hermes/shell-hooks-allowlist.json").read_text(encoding="utf-8"))
 plain_command = kimi["hooks"][0]["command"]
 assert plain_command.startswith('bash "') and plain_command.endswith('" --format plain')
-command = plain_command.removesuffix(" --format plain") + " --format hermes"
+command = plain_command.removesuffix(" --format plain") + " --format hermes --profile compact"
 assert f'command: "{command.replace(chr(34), chr(92) + chr(34))}"' in hermes
 assert {"event": "pre_llm_call", "command": command} in allowlist["approvals"]
+assert all("/old/session-start.sh" not in item.get("command", "") for item in allowlist["approvals"])
 PY
 pass "quoted Hermes and Kimi paths"
 
